@@ -11,15 +11,17 @@ import {
   YAxis,
 } from "recharts";
 import { loadDashboard } from "./api";
-import type { AuthMode, Connection, DashboardData, PeriodKey } from "./types";
-
-const PERIODS: Array<{ key: PeriodKey; label: string }> = [
-  { key: "total", label: "All time" },
-  { key: "day", label: "24 hours" },
-  { key: "week", label: "7 days" },
-  { key: "month", label: "30 days" },
-  { key: "year", label: "365 days" },
-];
+import {
+  CALENDAR_PERIODS,
+  ROLLING_PERIODS,
+  type Selection,
+  canStep,
+  selectionLabel,
+  selectionPeriodKey,
+  selectionQuery,
+  toDateInput,
+} from "./ranges";
+import type { AuthMode, Connection, DashboardData } from "./types";
 
 const DASHBOARD_ENDPOINT =
   "https://dnodkkhbjalucwvmwhar.supabase.co/functions/v1/dashboard-stats";
@@ -109,13 +111,97 @@ function Login({ onConnect, busy, error }: {
   );
 }
 
-function Dashboard({ data, onRefresh, onDisconnect, refreshing }: {
+function RangeControls({ selection, onChange }: {
+  selection: Selection;
+  onChange: (next: Selection) => void;
+}) {
+  const today = toDateInput(new Date());
+  const custom = selection.mode === "custom"
+    ? selection
+    : { mode: "custom" as const, from: today, to: today };
+
+  return (
+    <div className="range-controls">
+      <nav className="period-tabs" aria-label="Calendar period">
+        {CALENDAR_PERIODS.map((period) => (
+          <button
+            key={period.unit}
+            className={selection.mode === "calendar" && selection.unit === period.unit ? "active" : ""}
+            onClick={() => onChange({ mode: "calendar", unit: period.unit, offset: 0 })}
+          >
+            {period.label}
+          </button>
+        ))}
+        <button
+          className={selection.mode === "custom" ? "active" : ""}
+          onClick={() => onChange(custom)}
+        >
+          Custom
+        </button>
+      </nav>
+      <nav className="period-tabs period-tabs--muted" aria-label="Rolling period">
+        {ROLLING_PERIODS.map((period) => (
+          <button
+            key={period.key}
+            className={selection.mode === "rolling" && selection.key === period.key ? "active" : ""}
+            onClick={() => onChange({ mode: "rolling", key: period.key })}
+          >
+            {period.label}
+          </button>
+        ))}
+      </nav>
+      {selection.mode === "calendar" && (
+        <div className="range-stepper">
+          <button
+            onClick={() => onChange({ ...selection, offset: selection.offset - 1 })}
+            disabled={!canStep(selection, -1)}
+            aria-label="Previous period"
+          >
+            ‹
+          </button>
+          <span>{selectionLabel(selection)}</span>
+          <button
+            onClick={() => onChange({ ...selection, offset: selection.offset + 1 })}
+            disabled={!canStep(selection, 1)}
+            aria-label="Next period"
+          >
+            ›
+          </button>
+        </div>
+      )}
+      {selection.mode === "custom" && (
+        <div className="range-stepper range-stepper--custom">
+          <input
+            type="date"
+            value={custom.from}
+            max={custom.to}
+            onChange={(event) => onChange({ ...custom, from: event.target.value })}
+            aria-label="Range start"
+          />
+          <span>→</span>
+          <input
+            type="date"
+            value={custom.to}
+            min={custom.from}
+            max={today}
+            onChange={(event) => onChange({ ...custom, to: event.target.value })}
+            aria-label="Range end"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Dashboard({ data, selection, onSelectionChange, onRefresh, onDisconnect, refreshing }: {
   data: DashboardData;
+  selection: Selection;
+  onSelectionChange: (next: Selection) => void;
   onRefresh: () => void;
   onDisconnect: () => void;
   refreshing: boolean;
 }) {
-  const [periodKey, setPeriodKey] = useState<PeriodKey>("week");
+  const periodKey = selectionPeriodKey(selection);
   const selected = data.periods.find((period) => period.key === periodKey) || data.periods[0];
   const runsByProfile = Object.entries(selected.runsByProfile)
     .map(([distance, runs]) => ({ distance: Number(distance), label: Number(distance) >= 1_000 ? `${Number(distance) / 1_000}k` : distance, runs }))
@@ -137,9 +223,7 @@ function Dashboard({ data, onRefresh, onDisconnect, refreshing }: {
       <main className="dashboard">
         <section className="hero-row">
           <div><p className="eyebrow">GAME HEALTH / {data.timezone}</p><h1>Players in motion.</h1><p>Updated {new Date(data.generatedAt).toLocaleString()}</p></div>
-          <nav className="period-tabs" aria-label="Reporting period">
-            {PERIODS.map((period) => <button key={period.key} className={periodKey === period.key ? "active" : ""} onClick={() => setPeriodKey(period.key)}>{period.label}</button>)}
-          </nav>
+          <RangeControls selection={selection} onChange={onSelectionChange} />
         </section>
 
         <section className="metrics-grid">
@@ -155,13 +239,13 @@ function Dashboard({ data, onRefresh, onDisconnect, refreshing }: {
 
         <section className="chart-grid">
           <article className="panel panel--wide">
-            <div className="panel__heading"><div><p className="eyebrow">30-DAY MOVEMENT</p><h2>Activity rhythm</h2></div><div className="legend"><span className="legend__runs">Runs</span><span className="legend__players">Active players</span></div></div>
+            <div className="panel__heading"><div><p className="eyebrow">{trend.length}-DAY MOVEMENT</p><h2>Activity rhythm</h2></div><div className="legend"><span className="legend__runs">Runs</span><span className="legend__players">Active players</span></div></div>
             <div className="large-chart">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={trend} margin={{ top: 15, right: 8, left: -20, bottom: 0 }}>
                   <defs><linearGradient id="runsFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#ff6b4a" stopOpacity={0.42}/><stop offset="100%" stopColor="#ff6b4a" stopOpacity={0}/></linearGradient></defs>
                   <CartesianGrid stroke="#d7d3ca" strokeDasharray="2 7" vertical={false} />
-                  <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#77746e", fontSize: 11 }} interval={5} />
+                  <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#77746e", fontSize: 11 }} minTickGap={28} />
                   <YAxis axisLine={false} tickLine={false} allowDecimals={false} tick={{ fill: "#77746e", fontSize: 11 }} />
                   <Tooltip contentStyle={{ background: "#171916", color: "#fff", border: 0, borderRadius: 4 }} labelStyle={{ color: "#b7ff46" }} />
                   <Area type="monotone" dataKey="runs" stroke="#ff6b4a" strokeWidth={3} fill="url(#runsFill)" />
@@ -220,28 +304,42 @@ function readSession(): Connection | null {
 export default function App() {
   const initialConnection = useMemo(readSession, []);
   const [connection, setConnection] = useState<Connection | null>(initialConnection);
+  const [selection, setSelection] = useState<Selection>({ mode: "calendar", unit: "week", offset: 0 });
   const [data, setData] = useState<DashboardData | null>(null);
   const [busy, setBusy] = useState(Boolean(initialConnection));
   const [error, setError] = useState<string | null>(null);
+  const hasData = data !== null;
 
-  const refresh = useCallback(async (nextConnection = connection) => {
+  const query = useMemo(() => selectionQuery(selection), [selection]);
+  const queryKey = `${query.from}|${query.to}|${query.timezone}`;
+
+  const refresh = useCallback(async (nextConnection: Connection | null = connection) => {
     if (!nextConnection) return;
     setBusy(true); setError(null);
-    try { setData(await loadDashboard(nextConnection)); }
-    catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Could not load dashboard."); if (!data) setConnection(null); }
+    try { setData(await loadDashboard(nextConnection, query)); }
+    catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Could not load dashboard."); if (!hasData) setConnection(null); }
     finally { setBusy(false); }
-  }, [connection, data]);
+  }, [connection, hasData, query]);
 
-  useEffect(() => { if (initialConnection) void refresh(initialConnection); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (connection) void refresh(connection); }, [connection, queryKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const connect = (nextConnection: Connection, remember: boolean) => {
     sessionStorage.setItem("swipetrack-dashboard-session", JSON.stringify(nextConnection));
     if (remember) localStorage.setItem("swipetrack-dashboard-connection", JSON.stringify(nextConnection));
     else localStorage.removeItem("swipetrack-dashboard-connection");
-    setConnection(nextConnection); void refresh(nextConnection);
+    setConnection(nextConnection);
   };
   const disconnect = () => { sessionStorage.removeItem("swipetrack-dashboard-session"); setConnection(null); setData(null); setError(null); };
 
   if (!connection || !data) return <Login onConnect={connect} busy={busy} error={error} />;
-  return <Dashboard data={data} onRefresh={() => void refresh()} onDisconnect={disconnect} refreshing={busy} />;
+  return (
+    <Dashboard
+      data={data}
+      selection={selection}
+      onSelectionChange={setSelection}
+      onRefresh={() => void refresh()}
+      onDisconnect={disconnect}
+      refreshing={busy}
+    />
+  );
 }

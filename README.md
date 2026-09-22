@@ -34,8 +34,20 @@ without changing the build configuration.
 
 ## Metric semantics
 
-Day, week, month, and year are rolling UTC windows of 24, 7, 30, and 365 days. Active means at
-least one completed race. A returning player is active in the current window and has a run before
-the window; the all-time view uses runs on at least two different UTC dates. Race time is completed
-race time, not whole-app session time. All-time distance and race time include imported progression,
-while the timed windows are calculated from server-recorded race results.
+Two families of reporting periods are available.
+
+**Rolling windows** — 24 hours, 7 days, 30 days and 365 days back from now, plus all time. These
+are computed server-side and are timezone independent.
+
+**Calendar periods** — today, this week (Monday start), this month and this year, all anchored to
+midnight in the *viewer's* timezone. The browser converts those boundaries to absolute instants and
+sends them to the API as `from`/`to`, so the arrow buttons can step to yesterday, last week, the
+previous month or year. "Custom" takes an inclusive start and end date in the same timezone.
+
+Active means at least one completed race in the window. A returning player is active in the window
+and has a run before it; the all-time view uses runs on at least two different UTC dates. Race time
+is completed race time, not whole-app session time. All-time distance and race time include
+imported progression, while the windowed views are calculated from server-recorded race results.
+
+The activity chart buckets by calendar day in the viewer's timezone and covers the selected range
+(30 days for the rolling views, capped at 400 days).

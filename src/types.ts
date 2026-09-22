@@ -1,8 +1,9 @@
-export type PeriodKey = "total" | "day" | "week" | "month" | "year";
+export type PeriodKey = "total" | "day" | "week" | "month" | "year" | "range";
 
 export interface PeriodStats {
   key: PeriodKey;
   startsAt: string | null;
+  endsAt: string | null;
   activePlayers: number;
   newPlayers: number;
   runs: number;
@@ -36,6 +37,12 @@ export interface DashboardData {
 }
 
 export type AuthMode = "secret" | "jwt";
+
+export interface DashboardQuery {
+  from: string | null;
+  to: string | null;
+  timezone: string;
+}
 
 export interface Connection {
   endpoint: string;
