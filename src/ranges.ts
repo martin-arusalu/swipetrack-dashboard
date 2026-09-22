@@ -104,6 +104,74 @@ export function selectionQuery(selection: Selection): DashboardQuery {
   };
 }
 
+/** Returns the immediately preceding, non-overlapping window for a selection. */
+export function previousPeriodQuery(selection: Selection): DashboardQuery | null {
+  if (selection.mode === "rolling") {
+    if (selection.key === "total" || selection.key === "range") return null;
+    const durations: Record<Exclude<PeriodKey, "total" | "range">, number> = {
+      day: 24 * 60 * 60 * 1_000,
+      week: 7 * 24 * 60 * 60 * 1_000,
+      month: 30 * 24 * 60 * 60 * 1_000,
+      year: 365 * 24 * 60 * 60 * 1_000,
+    };
+    const duration = durations[selection.key];
+    const to = new Date();
+    to.setTime(to.getTime() - duration);
+    const from = new Date(to.getTime() - duration);
+    return { from: from.toISOString(), to: to.toISOString(), timezone: TIMEZONE };
+  }
+
+  if (selection.mode === "calendar") {
+    const bounds = selectionBounds({ ...selection, offset: selection.offset - 1 });
+    if (!bounds) return null;
+    return {
+      from: bounds.from.toISOString(),
+      to: bounds.to.toISOString(),
+      timezone: TIMEZONE,
+    };
+  }
+
+  const from = parseDateInput(selection.from);
+  const to = parseDateInput(selection.to);
+  if (!from || !to || to < from) return null;
+  const dayCount = Math.round(
+    (Date.UTC(to.getFullYear(), to.getMonth(), to.getDate()) -
+      Date.UTC(from.getFullYear(), from.getMonth(), from.getDate())) /
+      (24 * 60 * 60 * 1_000),
+  ) + 1;
+  const previousFrom = new Date(
+    from.getFullYear(),
+    from.getMonth(),
+    from.getDate() - dayCount,
+  );
+  return {
+    from: previousFrom.toISOString(),
+    to: from.toISOString(),
+    timezone: TIMEZONE,
+  };
+}
+
+export function previousPeriodLabel(selection: Selection): string {
+  if (selection.mode === "custom") return "vs prior period";
+  if (selection.mode === "rolling") {
+    const labels: Partial<Record<PeriodKey, string>> = {
+      day: "vs prior 24 hours",
+      week: "vs prior 7 days",
+      month: "vs prior 30 days",
+      year: "vs prior 365 days",
+    };
+    return labels[selection.key] ?? "vs prior period";
+  }
+  if (selection.unit === "day" && selection.offset === 0) return "vs yesterday";
+  const labels: Record<CalendarUnit, string> = {
+    day: "vs previous day",
+    week: "vs previous week",
+    month: "vs previous month",
+    year: "vs previous year",
+  };
+  return labels[selection.unit];
+}
+
 export function selectionPeriodKey(selection: Selection): PeriodKey {
   return selection.mode === "rolling" ? selection.key : "range";
 }

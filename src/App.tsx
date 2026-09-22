@@ -16,12 +16,14 @@ import {
   ROLLING_PERIODS,
   type Selection,
   canStep,
+  previousPeriodLabel,
+  previousPeriodQuery,
   selectionLabel,
   selectionPeriodKey,
   selectionQuery,
   toDateInput,
 } from "./ranges";
-import type { AuthMode, Connection, DashboardData } from "./types";
+import type { AuthMode, Connection, DashboardData, PeriodStats } from "./types";
 
 const DASHBOARD_ENDPOINT =
   "https://dnodkkhbjalucwvmwhar.supabase.co/functions/v1/dashboard-stats";
@@ -48,10 +50,26 @@ function dateLabel(value: string): string {
     .format(new Date(`${value}T00:00:00Z`));
 }
 
-function MetricCard({ label, value, detail, tone = "ink" }: {
+function percentageChange(current: number, previous: number): string {
+  if (previous === 0) return current === 0 ? "0%" : "new";
+  const change = ((current - previous) / Math.abs(previous)) * 100;
+  return `${change > 0 ? "+" : ""}${formatNumber(change, 1)}%`;
+}
+
+function signedValue(value: number, formatter: (value: number) => string): string {
+  if (value === 0) return formatter(0);
+  return `${value > 0 ? "+" : "−"}${formatter(Math.abs(value))}`;
+}
+
+function MetricCard({ label, value, detail, current, previous, deltaFormatter = formatNumber, deltaUnit, comparisonLabel, tone = "ink" }: {
   label: string;
   value: string;
   detail: string;
+  current: number;
+  previous?: number;
+  deltaFormatter?: (value: number) => string;
+  deltaUnit?: string;
+  comparisonLabel: string;
   tone?: "ink" | "coral" | "lime";
 }) {
   return (
@@ -59,6 +77,12 @@ function MetricCard({ label, value, detail, tone = "ink" }: {
       <div className="metric-card__top"><span>{label}</span><i aria-hidden="true" /></div>
       <strong>{value}</strong>
       <p>{detail}</p>
+      {previous !== undefined && (
+        <p className={`metric-card__change ${current - previous < 0 ? "metric-card__change--down" : ""}`}>
+          <b>{percentageChange(current, previous)}</b>
+          <span>{signedValue(current - previous, deltaFormatter)}{deltaUnit ? ` ${deltaUnit}` : ""} {comparisonLabel}</span>
+        </p>
+      )}
     </article>
   );
 }
@@ -107,6 +131,18 @@ function Login({ onConnect, busy, error }: {
           <p className="security-note"><span>●</span> Credentials stay in this browser. Leave “remember” off on shared devices.</p>
         </div>
       </section>
+    </main>
+  );
+}
+
+function LoadingDashboard() {
+  return (
+    <main className="loading-screen" aria-live="polite" aria-busy="true">
+      <div className="brand brand--large"><span className="brand__mark">S</span><b>SwipeTrack</b></div>
+      <div className="loading-screen__pulse" aria-hidden="true"><i /><i /><i /></div>
+      <p className="eyebrow">RESTORING SESSION</p>
+      <h1>Loading game pulse…</h1>
+      <p>Checking your access and fetching the latest telemetry.</p>
     </main>
   );
 }
@@ -193,8 +229,9 @@ function RangeControls({ selection, onChange }: {
   );
 }
 
-function Dashboard({ data, selection, onSelectionChange, onRefresh, onDisconnect, refreshing }: {
+function Dashboard({ data, comparison, selection, onSelectionChange, onRefresh, onDisconnect, refreshing }: {
   data: DashboardData;
+  comparison: PeriodStats | null;
   selection: Selection;
   onSelectionChange: (next: Selection) => void;
   onRefresh: () => void;
@@ -209,6 +246,7 @@ function Dashboard({ data, selection, onSelectionChange, onRefresh, onDisconnect
   const trend = data.trend.map((point) => ({ ...point, label: dateLabel(point.date) }));
   const nameShare = selected.activePlayers ? selected.playersWithDisplayNames / selected.activePlayers : 0;
   const appleShare = selected.activePlayers ? selected.appleLinkedPlayers / selected.activePlayers : 0;
+  const comparisonText = previousPeriodLabel(selection);
 
   return (
     <div className="app-shell">
@@ -227,14 +265,14 @@ function Dashboard({ data, selection, onSelectionChange, onRefresh, onDisconnect
         </section>
 
         <section className="metrics-grid">
-          <MetricCard label="Active players" value={formatNumber(selected.activePlayers)} detail="Players who completed a run" tone="lime" />
-          <MetricCard label="New players" value={formatNumber(selected.newPlayers)} detail="New accounts created" />
-          <MetricCard label="Runs" value={formatNumber(selected.runs)} detail={`${formatNumber(selected.averageRunsPerActivePlayer, 2)} per active player`} tone="coral" />
-          <MetricCard label="Returning players" value={formatNumber(selected.returningPlayers)} detail={`${formatNumber(selected.retentionRate * 100, 1)}% of active players`} />
-          <MetricCard label="Distance covered" value={formatDistance(selected.distanceMeters)} detail={`${formatDistance(selected.averageDistancePerRunMeters)} average run`} />
-          <MetricCard label="Race time" value={formatDuration(selected.raceTimeMs)} detail="Recorded time running" />
-          <MetricCard label="Notifications sent" value={formatNumber(selected.notificationsSent)} detail={`${formatNumber(selected.notificationsFailed)} failed`} />
-          <MetricCard label="Personal bests" value={formatNumber(selected.personalBests)} detail="New PBs recorded" />
+          <MetricCard label="Active players" value={formatNumber(selected.activePlayers)} detail="Players who completed a run" current={selected.activePlayers} previous={comparison?.activePlayers} deltaUnit="players" comparisonLabel={comparisonText} tone="lime" />
+          <MetricCard label="New players" value={formatNumber(selected.newPlayers)} detail="New accounts created" current={selected.newPlayers} previous={comparison?.newPlayers} deltaUnit="players" comparisonLabel={comparisonText} />
+          <MetricCard label="Runs" value={formatNumber(selected.runs)} detail={`${formatNumber(selected.averageRunsPerActivePlayer, 2)} per active player`} current={selected.runs} previous={comparison?.runs} deltaUnit="runs" comparisonLabel={comparisonText} tone="coral" />
+          <MetricCard label="Returning players" value={formatNumber(selected.returningPlayers)} detail={`${formatNumber(selected.retentionRate * 100, 1)}% of active players`} current={selected.returningPlayers} previous={comparison?.returningPlayers} deltaUnit="players" comparisonLabel={comparisonText} />
+          <MetricCard label="Distance covered" value={formatDistance(selected.distanceMeters)} detail={`${formatDistance(selected.averageDistancePerRunMeters)} average run`} current={selected.distanceMeters} previous={comparison?.distanceMeters} deltaFormatter={formatDistance} comparisonLabel={comparisonText} />
+          <MetricCard label="Race time" value={formatDuration(selected.raceTimeMs)} detail="Recorded time running" current={selected.raceTimeMs} previous={comparison?.raceTimeMs} deltaFormatter={formatDuration} comparisonLabel={comparisonText} />
+          <MetricCard label="Notifications sent" value={formatNumber(selected.notificationsSent)} detail={`${formatNumber(selected.notificationsFailed)} failed`} current={selected.notificationsSent} previous={comparison?.notificationsSent} deltaUnit="notifications" comparisonLabel={comparisonText} />
+          <MetricCard label="Personal bests" value={formatNumber(selected.personalBests)} detail="New PBs recorded" current={selected.personalBests} previous={comparison?.personalBests} deltaUnit="PBs" comparisonLabel={comparisonText} />
         </section>
 
         <section className="chart-grid">
@@ -306,22 +344,32 @@ export default function App() {
   const [connection, setConnection] = useState<Connection | null>(initialConnection);
   const [selection, setSelection] = useState<Selection>({ mode: "calendar", unit: "week", offset: 0 });
   const [data, setData] = useState<DashboardData | null>(null);
+  const [comparison, setComparison] = useState<PeriodStats | null>(null);
   const [busy, setBusy] = useState(Boolean(initialConnection));
   const [error, setError] = useState<string | null>(null);
   const hasData = data !== null;
 
   const query = useMemo(() => selectionQuery(selection), [selection]);
   const queryKey = `${query.from}|${query.to}|${query.timezone}`;
+  const selectionKey = JSON.stringify(selection);
 
   const refresh = useCallback(async (nextConnection: Connection | null = connection) => {
     if (!nextConnection) return;
-    setBusy(true); setError(null);
-    try { setData(await loadDashboard(nextConnection, query)); }
+    setBusy(true); setError(null); setComparison(null);
+    try {
+      const comparisonQuery = previousPeriodQuery(selection);
+      const [nextData, comparisonData] = await Promise.all([
+        loadDashboard(nextConnection, query),
+        comparisonQuery ? loadDashboard(nextConnection, comparisonQuery) : Promise.resolve(null),
+      ]);
+      setData(nextData);
+      setComparison(comparisonData?.periods.find((period) => period.key === "range") ?? null);
+    }
     catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Could not load dashboard."); if (!hasData) setConnection(null); }
     finally { setBusy(false); }
-  }, [connection, hasData, query]);
+  }, [connection, hasData, query, selection]);
 
-  useEffect(() => { if (connection) void refresh(connection); }, [connection, queryKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (connection) void refresh(connection); }, [connection, queryKey, selectionKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const connect = (nextConnection: Connection, remember: boolean) => {
     sessionStorage.setItem("swipetrack-dashboard-session", JSON.stringify(nextConnection));
@@ -329,12 +377,14 @@ export default function App() {
     else localStorage.removeItem("swipetrack-dashboard-connection");
     setConnection(nextConnection);
   };
-  const disconnect = () => { sessionStorage.removeItem("swipetrack-dashboard-session"); setConnection(null); setData(null); setError(null); };
+  const disconnect = () => { sessionStorage.removeItem("swipetrack-dashboard-session"); setConnection(null); setData(null); setComparison(null); setError(null); };
 
+  if (connection && !data) return <LoadingDashboard />;
   if (!connection || !data) return <Login onConnect={connect} busy={busy} error={error} />;
   return (
     <Dashboard
       data={data}
+      comparison={comparison}
       selection={selection}
       onSelectionChange={setSelection}
       onRefresh={() => void refresh()}

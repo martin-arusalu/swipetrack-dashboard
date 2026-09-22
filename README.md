@@ -51,3 +51,7 @@ imported progression, while the windowed views are calculated from server-record
 
 The activity chart buckets by calendar day in the viewer's timezone and covers the selected range
 (30 days for the rolling views, capped at 400 days).
+
+Metric cards compare the selected period with its immediately preceding equivalent and show both
+absolute and percentage change. All time has no comparison, and growth from a zero baseline is
+shown as “new” because a percentage change is undefined.
