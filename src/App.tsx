@@ -319,7 +319,7 @@ function Dashboard({ data, comparison, selection, onSelectionChange, onRefresh, 
 
           <article className="panel notes-panel">
             <p className="eyebrow">READING THE DATA</p><h2>Metric notes</h2>
-            <dl><div><dt>Active</dt><dd>Completed at least one run in the rolling period.</dd></div><div><dt>Returning</dt><dd>Active now and had a run before this period. All-time uses two distinct run days.</dd></div><div><dt>Identity</dt><dd>For timed periods, named and Apple-linked counts are among active players.</dd></div><div><dt>Race time</dt><dd>Time in completed races; menus and background time are not tracked.</dd></div><div><dt>Origins</dt><dd>Country and city of the player's last PlayFab login. Players who never linked PlayFab have no location.</dd></div></dl>
+            <dl><div><dt>Active</dt><dd>Completed at least one run in the rolling period.</dd></div><div><dt>Returning</dt><dd>Active now and had a run before this period. All-time uses two distinct run days.</dd></div><div><dt>Identity</dt><dd>For timed periods, named and Apple-linked counts are among active players.</dd></div><div><dt>Race time</dt><dd>Time in completed races; menus and background time are not tracked.</dd></div><div><dt>Origins</dt><dd>Country and city from the IP of the player's first game open. Players who have not opened the game since tracking began have no location.</dd></div></dl>
           </article>
 
           {data.locations && <LocationPanels locations={data.locations} allTime={periodKey === "total"} />}
@@ -350,7 +350,7 @@ function LocationPanels({ locations, allTime }: { locations: LocationStats; allT
   return (
     <>
       <article className="panel panel--wide">
-        <div className="panel__heading"><div><p className="eyebrow">PLAYER ORIGINS</p><h2>Where players come from</h2></div><p className="panel__note">{scope}, by country from PlayFab</p></div>
+        <div className="panel__heading"><div><p className="eyebrow">PLAYER ORIGINS</p><h2>Where players come from</h2></div><p className="panel__note">{scope}, by country</p></div>
         {countries.length === 0
           ? <p className="empty-note">No player locations yet.</p>
           : (
