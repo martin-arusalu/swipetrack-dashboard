@@ -29,11 +29,33 @@ export interface TrendPoint {
   distanceMeters: number;
 }
 
+export interface CountryCount {
+  countryCode: string;
+  continentCode: string | null;
+  players: number;
+}
+
+export interface CityCount {
+  countryCode: string;
+  city: string;
+  players: number;
+}
+
+/** Players who raced in the selected range, or every player for all-time. */
+export interface LocationStats {
+  playersWithLocation: number;
+  playersWithoutLocation: number;
+  countries: CountryCount[];
+  cities: CityCount[];
+}
+
 export interface DashboardData {
   generatedAt: string;
   timezone: string;
   periods: PeriodStats[];
   trend: TrendPoint[];
+  /** Absent from API deployments that predate player locations. */
+  locations?: LocationStats;
 }
 
 export type AuthMode = "secret" | "jwt";

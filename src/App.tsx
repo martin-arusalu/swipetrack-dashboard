@@ -23,7 +23,7 @@ import {
   selectionQuery,
   toDateInput,
 } from "./ranges";
-import type { AuthMode, Connection, DashboardData, PeriodStats } from "./types";
+import type { AuthMode, Connection, DashboardData, LocationStats, PeriodStats } from "./types";
 
 const DASHBOARD_ENDPOINT =
   "https://dnodkkhbjalucwvmwhar.supabase.co/functions/v1/dashboard-stats";
@@ -319,12 +319,65 @@ function Dashboard({ data, comparison, selection, onSelectionChange, onRefresh, 
 
           <article className="panel notes-panel">
             <p className="eyebrow">READING THE DATA</p><h2>Metric notes</h2>
-            <dl><div><dt>Active</dt><dd>Completed at least one run in the rolling period.</dd></div><div><dt>Returning</dt><dd>Active now and had a run before this period. All-time uses two distinct run days.</dd></div><div><dt>Identity</dt><dd>For timed periods, named and Apple-linked counts are among active players.</dd></div><div><dt>Race time</dt><dd>Time in completed races; menus and background time are not tracked.</dd></div></dl>
+            <dl><div><dt>Active</dt><dd>Completed at least one run in the rolling period.</dd></div><div><dt>Returning</dt><dd>Active now and had a run before this period. All-time uses two distinct run days.</dd></div><div><dt>Identity</dt><dd>For timed periods, named and Apple-linked counts are among active players.</dd></div><div><dt>Race time</dt><dd>Time in completed races; menus and background time are not tracked.</dd></div><div><dt>Origins</dt><dd>Country and city of the player's last PlayFab login. Players who never linked PlayFab have no location.</dd></div></dl>
           </article>
+
+          {data.locations && <LocationPanels locations={data.locations} allTime={periodKey === "total"} />}
         </section>
       </main>
       <footer><span>SwipeTrack telemetry</span><span>No player-level data leaves the API.</span></footer>
     </div>
+  );
+}
+
+const regionNames = new Intl.DisplayNames(undefined, { type: "region" });
+
+function countryName(code: string): string {
+  try { return regionNames.of(code) ?? code; } catch { return code; }
+}
+
+function countryFlag(code: string): string {
+  return String.fromCodePoint(...[...code.toUpperCase()].map((letter) => 0x1f1e6 + letter.charCodeAt(0) - 65));
+}
+
+function LocationPanels({ locations, allTime }: { locations: LocationStats; allTime: boolean }) {
+  const countries = locations.countries.slice(0, 12);
+  const top = countries[0]?.players ?? 0;
+  const known = locations.playersWithLocation;
+  const population = known + locations.playersWithoutLocation;
+  const scope = allTime ? "All players" : "Players who raced in this period";
+
+  return (
+    <>
+      <article className="panel panel--wide">
+        <div className="panel__heading"><div><p className="eyebrow">PLAYER ORIGINS</p><h2>Where players come from</h2></div><p className="panel__note">{scope}, by country from PlayFab</p></div>
+        {countries.length === 0
+          ? <p className="empty-note">No player locations yet.</p>
+          : (
+            <ol className="country-list">
+              {countries.map((country) => (
+                <li key={country.countryCode}>
+                  <span className="country-list__name"><i aria-hidden="true">{countryFlag(country.countryCode)}</i>{countryName(country.countryCode)}</span>
+                  <span className="country-list__track"><i style={{ width: `${top ? (country.players / top) * 100 : 0}%` }} /></span>
+                  <b>{formatNumber(country.players)}</b>
+                  <em>{formatNumber(known ? (country.players / known) * 100 : 0, 0)}%</em>
+                </li>
+              ))}
+            </ol>
+          )}
+        {locations.countries.length > countries.length && <p className="panel__note">+{formatNumber(locations.countries.length - countries.length)} more countries</p>}
+      </article>
+
+      <article className="panel notes-panel city-panel">
+        <p className="eyebrow">TOP CITIES</p><h2>{formatNumber(locations.countries.length)} countries</h2>
+        <p className="city-panel__coverage">{formatNumber(known)} of {formatNumber(population)} players have a known location</p>
+        <ol>
+          {locations.cities.slice(0, 10).map((city) => (
+            <li key={`${city.countryCode}-${city.city}`}><span>{countryFlag(city.countryCode)} {city.city}</span><b>{formatNumber(city.players)}</b></li>
+          ))}
+        </ol>
+      </article>
+    </>
   );
 }
 
