@@ -95,12 +95,26 @@ export function selectionBounds(
   };
 }
 
+const ROLLING_DURATIONS: Record<Exclude<PeriodKey, "total" | "range">, number> = {
+  day: 24 * 60 * 60 * 1_000,
+  week: 7 * 24 * 60 * 60 * 1_000,
+  month: 30 * 24 * 60 * 60 * 1_000,
+  year: 365 * 24 * 60 * 60 * 1_000,
+};
+
 export function selectionQuery(selection: Selection): DashboardQuery {
   const bounds = selectionBounds(selection);
+  const rollingKey = selection.mode === "rolling" &&
+      selection.key !== "total" && selection.key !== "range"
+    ? selection.key
+    : null;
   return {
     from: bounds ? bounds.from.toISOString() : null,
     to: bounds ? bounds.to.toISOString() : null,
     timezone: TIMEZONE,
+    topFrom: rollingKey
+      ? new Date(Date.now() - ROLLING_DURATIONS[rollingKey]).toISOString()
+      : null,
   };
 }
 
@@ -108,13 +122,7 @@ export function selectionQuery(selection: Selection): DashboardQuery {
 export function previousPeriodQuery(selection: Selection): DashboardQuery | null {
   if (selection.mode === "rolling") {
     if (selection.key === "total" || selection.key === "range") return null;
-    const durations: Record<Exclude<PeriodKey, "total" | "range">, number> = {
-      day: 24 * 60 * 60 * 1_000,
-      week: 7 * 24 * 60 * 60 * 1_000,
-      month: 30 * 24 * 60 * 60 * 1_000,
-      year: 365 * 24 * 60 * 60 * 1_000,
-    };
-    const duration = durations[selection.key];
+    const duration = ROLLING_DURATIONS[selection.key];
     const to = new Date();
     to.setTime(to.getTime() - duration);
     const from = new Date(to.getTime() - duration);

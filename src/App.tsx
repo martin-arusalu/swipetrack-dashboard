@@ -23,7 +23,7 @@ import {
   selectionQuery,
   toDateInput,
 } from "./ranges";
-import type { AuthMode, Connection, DashboardData, LocationStats, PeriodStats } from "./types";
+import type { AuthMode, Connection, DashboardData, LocationStats, PeriodStats, TopPlayer } from "./types";
 
 const DASHBOARD_ENDPOINT =
   "https://dnodkkhbjalucwvmwhar.supabase.co/functions/v1/dashboard-stats";
@@ -319,13 +319,15 @@ function Dashboard({ data, comparison, selection, onSelectionChange, onRefresh, 
 
           <article className="panel notes-panel">
             <p className="eyebrow">READING THE DATA</p><h2>Metric notes</h2>
-            <dl><div><dt>Active</dt><dd>Completed at least one run in the rolling period.</dd></div><div><dt>Returning</dt><dd>Active now and had a run before this period. All-time uses two distinct run days.</dd></div><div><dt>Identity</dt><dd>For timed periods, named and Apple-linked counts are among active players.</dd></div><div><dt>Race time</dt><dd>Time in completed races; menus and background time are not tracked.</dd></div><div><dt>Origins</dt><dd>Country and city from the IP of the player's first game open. Players who have not opened the game since tracking began have no location.</dd></div></dl>
+            <dl><div><dt>Active</dt><dd>Completed at least one run in the rolling period.</dd></div><div><dt>Returning</dt><dd>Active now and had a run before this period. All-time uses two distinct run days.</dd></div><div><dt>Identity</dt><dd>For timed periods, named and Apple-linked counts are among active players.</dd></div><div><dt>Race time</dt><dd>Time in completed races; menus and background time are not tracked.</dd></div><div><dt>Top players</dt><dd>Ranked by days with a completed run, then runs. Counts use server-recorded races only, not imported history.</dd></div><div><dt>Origins</dt><dd>Country and city from the IP of the player's first game open. Players who have not opened the game since tracking began have no location.</dd></div></dl>
           </article>
 
           {data.locations && <LocationPanels locations={data.locations} allTime={periodKey === "total"} />}
+
+          {data.topPlayers && <TopPlayersPanel players={data.topPlayers} allTime={periodKey === "total"} />}
         </section>
       </main>
-      <footer><span>SwipeTrack telemetry</span><span>No player-level data leaves the API.</span></footer>
+      <footer><span>SwipeTrack telemetry</span><span>Only top-player display names leave the API.</span></footer>
     </div>
   );
 }
@@ -381,6 +383,37 @@ function LocationPanels({ locations, allTime }: { locations: LocationStats; allT
   );
 }
 
+function TopPlayersPanel({ players, allTime }: { players: TopPlayer[]; allTime: boolean }) {
+  return (
+    <article className="panel panel--full">
+      <div className="panel__heading"><div><p className="eyebrow">MOST ACTIVE</p><h2>Top 10 active players</h2></div><p className="panel__note">{allTime ? "All time" : "In this period"}, by days active then runs</p></div>
+      {players.length === 0
+        ? <p className="empty-note">No completed runs in this period.</p>
+        : (
+          <div className="top-players">
+            <table>
+              <thead>
+                <tr><th scope="col">#</th><th scope="col">Player</th><th scope="col">Days active</th><th scope="col">Runs</th><th scope="col">Distance</th><th scope="col">Streak</th></tr>
+              </thead>
+              <tbody>
+                {players.map((player, index) => (
+                  <tr key={player.displayName}>
+                    <td>{index + 1}</td>
+                    <th scope="row">{player.displayName}</th>
+                    <td><b>{formatNumber(player.daysActive)}</b></td>
+                    <td>{formatNumber(player.runs)}</td>
+                    <td>{formatDistance(player.distanceMeters)}</td>
+                    <td>{player.currentStreakDays > 0 ? `${formatNumber(player.currentStreakDays)} ${player.currentStreakDays === 1 ? "day" : "days"}` : "–"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+    </article>
+  );
+}
+
 function Ring({ value, label }: { value: number; label: string }) {
   const degrees = Math.min(360, Math.max(0, value * 360));
   return <div className="ring" style={{ background: `conic-gradient(#ff6b4a ${degrees}deg, #dedbd3 ${degrees}deg)` }}><div><strong>{formatNumber(value * 100, 1)}%</strong><span>{label}</span></div></div>;
@@ -412,7 +445,8 @@ export default function App() {
     try {
       const comparisonQuery = previousPeriodQuery(selection);
       const [nextData, comparisonData] = await Promise.all([
-        loadDashboard(nextConnection, query),
+        // Rebuilt per request so the rolling top-players start tracks the current time.
+        loadDashboard(nextConnection, selectionQuery(selection)),
         comparisonQuery ? loadDashboard(nextConnection, comparisonQuery) : Promise.resolve(null),
       ]);
       setData(nextData);
@@ -420,7 +454,7 @@ export default function App() {
     }
     catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Could not load dashboard."); if (!hasData) setConnection(null); }
     finally { setBusy(false); }
-  }, [connection, hasData, query, selection]);
+  }, [connection, hasData, selection]);
 
   useEffect(() => { if (connection) void refresh(connection); }, [connection, queryKey, selectionKey]); // eslint-disable-line react-hooks/exhaustive-deps
 

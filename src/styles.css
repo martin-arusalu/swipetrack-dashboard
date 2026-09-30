@@ -66,3 +66,13 @@ footer { border-top:1px solid var(--line); padding:20px clamp(20px, 4vw, 64px); 
 footer { gap:20px; } }
 @media (max-width: 560px) { .country-list li { grid-template-columns:minmax(0, 1fr) 1fr 44px; gap:10px; }.country-list em { display:none; } }
 @media (max-width: 420px) { .metrics-grid { grid-template-columns:1fr; }.metric-card { min-height:140px; }.topbar__actions { gap:6px; }.text-button { display:none; } }
+
+.panel--full { grid-column:1 / -1; }
+.top-players { overflow-x:auto; margin:18px 0 0; }
+.top-players table { width:100%; border-collapse:collapse; font-size:13px; }
+.top-players th, .top-players td { padding:9px 10px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap; font-family:"DM Mono", monospace; font-weight:400; }
+.top-players thead th { color:#77756f; font:500 10px "DM Mono", monospace; text-transform:uppercase; letter-spacing:.08em; }
+.top-players tbody th { text-align:left; font:700 13px Manrope, sans-serif; width:100%; }
+.top-players thead th:nth-child(2) { text-align:left; }
+.top-players td:first-child, .top-players thead th:first-child { text-align:left; color:#77756f; padding-left:0; width:1%; }
+.top-players tbody td b { font-weight:500; background:var(--lime); padding:1px 6px; }

@@ -49,6 +49,17 @@ export interface LocationStats {
   cities: CityCount[];
 }
 
+/** Counted from completed runs in the selected range (all time when none). */
+export interface TopPlayer {
+  displayName: string;
+  distanceMeters: number;
+  runs: number;
+  /** Today's streak; zero once the player misses a day. */
+  currentStreakDays: number;
+  /** Distinct days, in the viewer's timezone, with at least one completed run. */
+  daysActive: number;
+}
+
 export interface DashboardData {
   generatedAt: string;
   timezone: string;
@@ -56,6 +67,8 @@ export interface DashboardData {
   trend: TrendPoint[];
   /** Absent from API deployments that predate player locations. */
   locations?: LocationStats;
+  /** Top ten by days active, then runs. Absent from API deployments that predate it. */
+  topPlayers?: TopPlayer[];
 }
 
 export type AuthMode = "secret" | "jwt";
@@ -64,6 +77,8 @@ export interface DashboardQuery {
   from: string | null;
   to: string | null;
   timezone: string;
+  /** Start of the top-players window for rolling views, which send no `from`. */
+  topFrom?: string | null;
 }
 
 export interface Connection {

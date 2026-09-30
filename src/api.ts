@@ -15,6 +15,7 @@ export async function loadDashboard(
   url.searchParams.set("tz", query.timezone);
   if (query.from) url.searchParams.set("from", query.from);
   if (query.to) url.searchParams.set("to", query.to);
+  if (query.topFrom) url.searchParams.set("topFrom", query.topFrom);
 
   const response = await fetch(url, { headers });
   const payload = await response.json().catch(() => null) as {
