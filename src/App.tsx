@@ -393,7 +393,7 @@ function TopPlayersPanel({ players, allTime }: { players: TopPlayer[]; allTime: 
           <div className="top-players">
             <table>
               <thead>
-                <tr><th scope="col">#</th><th scope="col">Player</th><th scope="col">Country</th><th scope="col">Days active</th><th scope="col">Runs</th><th scope="col">Distance</th><th scope="col">Streak</th></tr>
+                <tr><th scope="col">#</th><th scope="col">Player</th><th scope="col">Country</th><th scope="col">Days active</th><th scope="col">Runs</th><th scope="col">Distance</th><th scope="col">Streak</th><th scope="col">Version</th></tr>
               </thead>
               <tbody>
                 {players.map((player, index) => (
@@ -407,6 +407,7 @@ function TopPlayersPanel({ players, allTime }: { players: TopPlayer[]; allTime: 
                     <td>{formatNumber(player.runs)}</td>
                     <td>{formatDistance(player.distanceMeters)}</td>
                     <td>{player.currentStreakDays > 0 ? `${formatNumber(player.currentStreakDays)} ${player.currentStreakDays === 1 ? "day" : "days"}` : "–"}</td>
+                    <td className="top-players__version">{player.latestVersion ?? "–"}</td>
                   </tr>
                 ))}
               </tbody>

@@ -61,6 +61,8 @@ export interface TopPlayer {
   /** From the player's first game open; null when unknown. Absent from older API deployments. */
   countryCode?: string | null;
   city?: string | null;
+  /** Client version from the player's most recent run, in any period. Absent from older API deployments. */
+  latestVersion?: string | null;
 }
 
 export interface DashboardData {
