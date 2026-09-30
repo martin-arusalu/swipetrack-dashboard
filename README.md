@@ -55,7 +55,8 @@ The activity chart buckets by calendar day in the viewer's timezone and covers t
 The top 10 active players table ranks players by days active (distinct calendar days in the
 viewer's timezone with at least one completed run), then runs, then distance. Days, runs and
 distance cover the selected period and count server-recorded race results only, so imported PlayFab
-history is excluded. Streak is the player's current daily streak, shown as zero once they miss a day.
+history is excluded. Streak is the player's current daily streak, shown as zero once they miss a day. Country and city
+come from the IP of the player's first game open, like the origins panel.
 
 Metric cards compare the selected period with its immediately preceding equivalent and show both
 absolute and percentage change. All time has no comparison, and growth from a zero baseline is

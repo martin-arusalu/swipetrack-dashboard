@@ -327,7 +327,7 @@ function Dashboard({ data, comparison, selection, onSelectionChange, onRefresh, 
           {data.topPlayers && <TopPlayersPanel players={data.topPlayers} allTime={periodKey === "total"} />}
         </section>
       </main>
-      <footer><span>SwipeTrack telemetry</span><span>Only top-player display names leave the API.</span></footer>
+      <footer><span>SwipeTrack telemetry</span><span>Only top-player names and locations leave the API.</span></footer>
     </div>
   );
 }
@@ -393,13 +393,16 @@ function TopPlayersPanel({ players, allTime }: { players: TopPlayer[]; allTime: 
           <div className="top-players">
             <table>
               <thead>
-                <tr><th scope="col">#</th><th scope="col">Player</th><th scope="col">Days active</th><th scope="col">Runs</th><th scope="col">Distance</th><th scope="col">Streak</th></tr>
+                <tr><th scope="col">#</th><th scope="col">Player</th><th scope="col">Country</th><th scope="col">Days active</th><th scope="col">Runs</th><th scope="col">Distance</th><th scope="col">Streak</th></tr>
               </thead>
               <tbody>
                 {players.map((player, index) => (
                   <tr key={player.displayName}>
                     <td>{index + 1}</td>
                     <th scope="row">{player.displayName}</th>
+                    <td className="top-players__place">{player.countryCode
+                      ? <><i aria-hidden="true">{countryFlag(player.countryCode)}</i> {countryName(player.countryCode)}{player.city && <em>{player.city}</em>}</>
+                      : "–"}</td>
                     <td><b>{formatNumber(player.daysActive)}</b></td>
                     <td>{formatNumber(player.runs)}</td>
                     <td>{formatDistance(player.distanceMeters)}</td>

@@ -58,6 +58,9 @@ export interface TopPlayer {
   currentStreakDays: number;
   /** Distinct days, in the viewer's timezone, with at least one completed run. */
   daysActive: number;
+  /** From the player's first game open; null when unknown. Absent from older API deployments. */
+  countryCode?: string | null;
+  city?: string | null;
 }
 
 export interface DashboardData {
