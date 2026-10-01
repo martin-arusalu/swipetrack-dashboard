@@ -59,6 +59,11 @@ history is excluded. Streak is the player's current daily streak, shown as zero 
 come from the IP of the player's first game open, like the origins panel. Version is the client version of
 the player's most recent run, whatever the selected period.
 
+The leaderboards panel shows every game leaderboard (each distance's best time, best average and top
+speed, and total distance), 100 rows per page. Boards are all time and ignore the selected period.
+They read Supabase leaderboard entries only, so players still on legacy PlayFab records are not
+listed and the game may show those players where the dashboard does not.
+
 Metric cards compare the selected period with its immediately preceding equivalent and show both
 absolute and percentage change. All time has no comparison, and growth from a zero baseline is
 shown as “new” because a percentage change is undefined.

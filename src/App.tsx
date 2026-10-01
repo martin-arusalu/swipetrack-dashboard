@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { loadDashboard } from "./api";
+import { loadDashboard, loadLeaderboard } from "./api";
 import {
   CALENDAR_PERIODS,
   ROLLING_PERIODS,
@@ -23,7 +23,7 @@ import {
   selectionQuery,
   toDateInput,
 } from "./ranges";
-import type { AuthMode, Connection, DashboardData, LocationStats, PeriodStats, TopPlayer } from "./types";
+import type { AuthMode, Connection, DashboardData, LeaderboardPage, LeaderboardStat, LocationStats, PeriodStats, TopPlayer } from "./types";
 
 const DASHBOARD_ENDPOINT =
   "https://dnodkkhbjalucwvmwhar.supabase.co/functions/v1/dashboard-stats";
@@ -229,7 +229,8 @@ function RangeControls({ selection, onChange }: {
   );
 }
 
-function Dashboard({ data, comparison, selection, onSelectionChange, onRefresh, onDisconnect, refreshing }: {
+function Dashboard({ connection, data, comparison, selection, onSelectionChange, onRefresh, onDisconnect, refreshing }: {
+  connection: Connection;
   data: DashboardData;
   comparison: PeriodStats | null;
   selection: Selection;
@@ -319,15 +320,17 @@ function Dashboard({ data, comparison, selection, onSelectionChange, onRefresh, 
 
           <article className="panel notes-panel">
             <p className="eyebrow">READING THE DATA</p><h2>Metric notes</h2>
-            <dl><div><dt>Active</dt><dd>Completed at least one run in the rolling period.</dd></div><div><dt>Returning</dt><dd>Active now and had a run before this period. All-time uses two distinct run days.</dd></div><div><dt>Identity</dt><dd>For timed periods, named and Apple-linked counts are among active players.</dd></div><div><dt>Race time</dt><dd>Time in completed races; menus and background time are not tracked.</dd></div><div><dt>Top players</dt><dd>Ranked by days with a completed run, then runs. Counts use server-recorded races only, not imported history.</dd></div><div><dt>Origins</dt><dd>Country and city from the IP of the player's first game open. Players who have not opened the game since tracking began have no location.</dd></div></dl>
+            <dl><div><dt>Active</dt><dd>Completed at least one run in the rolling period.</dd></div><div><dt>Returning</dt><dd>Active now and had a run before this period. All-time uses two distinct run days.</dd></div><div><dt>Identity</dt><dd>For timed periods, named and Apple-linked counts are among active players.</dd></div><div><dt>Race time</dt><dd>Time in completed races; menus and background time are not tracked.</dd></div><div><dt>Top players</dt><dd>Ranked by days with a completed run, then runs. Counts use server-recorded races only, not imported history.</dd></div><div><dt>Leaderboards</dt><dd>All-time game leaderboards from Supabase. Players still on legacy PlayFab records are not listed.</dd></div><div><dt>Origins</dt><dd>Country and city from the IP of the player's first game open. Players who have not opened the game since tracking began have no location.</dd></div></dl>
           </article>
 
           {data.locations && <LocationPanels locations={data.locations} allTime={periodKey === "total"} />}
 
           {data.topPlayers && <TopPlayersPanel players={data.topPlayers} allTime={periodKey === "total"} />}
+
+          <LeaderboardPanel connection={connection} refreshKey={data.generatedAt} />
         </section>
       </main>
-      <footer><span>SwipeTrack telemetry</span><span>Only top-player names and locations leave the API.</span></footer>
+      <footer><span>SwipeTrack telemetry</span><span>Only top-player and leaderboard names and locations leave the API.</span></footer>
     </div>
   );
 }
@@ -418,6 +421,111 @@ function TopPlayersPanel({ players, allTime }: { players: TopPlayer[]; allTime: 
   );
 }
 
+const LEADERBOARDS: { stat: LeaderboardStat; label: string; heading: string }[] = [
+  { stat: "pb_100m", label: "100 m", heading: "100 m best times" },
+  { stat: "pb_200m", label: "200 m", heading: "200 m best times" },
+  { stat: "pb_400m", label: "400 m", heading: "400 m best times" },
+  { stat: "pb_800m", label: "800 m", heading: "800 m best times" },
+  { stat: "pb_1500m", label: "1500 m", heading: "1500 m best times" },
+  { stat: "pb_3000m", label: "3000 m", heading: "3000 m best times" },
+  { stat: "pb_5000m", label: "5 km", heading: "5 km best times" },
+  { stat: "pb_10000m", label: "10 km", heading: "10 km best times" },
+  { stat: "best_avg_speed", label: "Avg speed", heading: "Best average speed" },
+  { stat: "best_top_speed", label: "Top speed", heading: "Best top speed" },
+  { stat: "total_distance", label: "Distance", heading: "Total distance" },
+];
+
+function formatRaceTime(milliseconds: number): string {
+  const centiseconds = Math.round(milliseconds / 10);
+  const minutes = Math.floor(centiseconds / 6_000);
+  const seconds = (centiseconds % 6_000) / 100;
+  if (minutes === 0) return `${seconds.toFixed(2)} s`;
+  return `${minutes}:${seconds.toFixed(2).padStart(5, "0")}`;
+}
+
+function formatLeaderboardValue(stat: LeaderboardStat, value: number): string {
+  if (stat.startsWith("pb_")) return formatRaceTime(value);
+  if (stat === "total_distance") return formatDistance(value);
+  return `${formatNumber(value / 100, 2)} m/s`;
+}
+
+function LeaderboardPanel({ connection, refreshKey }: { connection: Connection; refreshKey: string }) {
+  const [stat, setStat] = useState<LeaderboardStat>("pb_100m");
+  const [page, setPage] = useState(1);
+  const [board, setBoard] = useState<LeaderboardPage | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true); setError(null);
+    loadLeaderboard(connection, stat, page)
+      .then((next) => { if (!cancelled) setBoard(next); })
+      .catch((requestError: unknown) => {
+        if (!cancelled) { setBoard(null); setError(requestError instanceof Error ? requestError.message : "Could not load leaderboard."); }
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [connection, stat, page, refreshKey]);
+
+  const definition = LEADERBOARDS.find((entry) => entry.stat === stat) ?? LEADERBOARDS[0];
+  const shown = board?.stat === stat ? board : null;
+  const pageCount = shown ? Math.max(1, Math.ceil(shown.total / shown.pageSize)) : 1;
+  const firstRank = shown && shown.entries.length ? shown.entries[0].rank : 0;
+  const lastRank = shown && shown.entries.length ? shown.entries[shown.entries.length - 1].rank : 0;
+
+  return (
+    <article className="panel panel--full leaderboard-panel">
+      <div className="panel__heading">
+        <div><p className="eyebrow">GAME LEADERBOARDS</p><h2>{definition.heading}</h2></div>
+        <p className="panel__note">{shown ? `${formatNumber(shown.total)} ranked players, all time` : "All time"}</p>
+      </div>
+      <nav className="period-tabs period-tabs--muted leaderboard-tabs" aria-label="Leaderboard">
+        {LEADERBOARDS.map((entry) => (
+          <button key={entry.stat} className={entry.stat === stat ? "active" : ""} onClick={() => { setStat(entry.stat); setPage(1); }}>
+            {entry.label}
+          </button>
+        ))}
+      </nav>
+      {error
+        ? <p className="empty-note" role="alert">{error}</p>
+        : !shown
+          ? <p className="empty-note">Loading leaderboard…</p>
+          : shown.entries.length === 0
+            ? <p className="empty-note">{shown.total === 0 ? "No one is on this leaderboard yet." : "No players on this page."}</p>
+            : (
+              <div className={`top-players leaderboard-table ${loading ? "leaderboard-table--loading" : ""}`} aria-busy={loading}>
+                <table>
+                  <thead>
+                    <tr><th scope="col">#</th><th scope="col">Player</th><th scope="col">Country</th><th scope="col">{stat.startsWith("pb_") ? "Time" : definition.label}</th><th scope="col">Set on</th></tr>
+                  </thead>
+                  <tbody>
+                    {shown.entries.map((entry) => (
+                      <tr key={entry.rank}>
+                        <td>{entry.rank}</td>
+                        <th scope="row">{entry.displayName}</th>
+                        <td className="top-players__place">{entry.countryCode
+                          ? <><i aria-hidden="true">{countryFlag(entry.countryCode)}</i> {countryName(entry.countryCode)}{entry.city && <em>{entry.city}</em>}</>
+                          : "–"}</td>
+                        <td><b>{formatLeaderboardValue(stat, entry.value)}</b></td>
+                        <td className="top-players__version">{new Date(entry.achievedAt).toLocaleDateString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+      {shown && shown.total > shown.pageSize && (
+        <div className="range-stepper leaderboard-pager">
+          <button onClick={() => setPage(page - 1)} disabled={loading || page <= 1} aria-label="Previous page">‹</button>
+          <span>{firstRank ? `${formatNumber(firstRank)}–${formatNumber(lastRank)} · ` : ""}Page {formatNumber(page)} of {formatNumber(pageCount)}</span>
+          <button onClick={() => setPage(page + 1)} disabled={loading || page >= pageCount} aria-label="Next page">›</button>
+        </div>
+      )}
+    </article>
+  );
+}
+
 function Ring({ value, label }: { value: number; label: string }) {
   const degrees = Math.min(360, Math.max(0, value * 360));
   return <div className="ring" style={{ background: `conic-gradient(#ff6b4a ${degrees}deg, #dedbd3 ${degrees}deg)` }}><div><strong>{formatNumber(value * 100, 1)}%</strong><span>{label}</span></div></div>;
@@ -474,6 +582,7 @@ export default function App() {
   if (!connection || !data) return <Login onConnect={connect} busy={busy} error={error} />;
   return (
     <Dashboard
+      connection={connection}
       data={data}
       comparison={comparison}
       selection={selection}

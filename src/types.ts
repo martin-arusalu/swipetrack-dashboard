@@ -76,6 +76,30 @@ export interface DashboardData {
   topPlayers?: TopPlayer[];
 }
 
+export type LeaderboardStat =
+  | "pb_100m" | "pb_200m" | "pb_400m" | "pb_800m" | "pb_1500m" | "pb_3000m" | "pb_5000m" | "pb_10000m"
+  | "best_avg_speed" | "best_top_speed" | "total_distance";
+
+export interface LeaderboardEntry {
+  rank: number;
+  displayName: string;
+  /** Race time in ms for pb_* boards, speed in cm/s for speed boards, metres for total_distance. */
+  value: number;
+  achievedAt: string;
+  /** From the player's first game open; null when unknown. */
+  countryCode: string | null;
+  city: string | null;
+}
+
+/** One page of a game leaderboard, from Supabase entries only (no mirrored PlayFab rows). */
+export interface LeaderboardPage {
+  stat: LeaderboardStat;
+  page: number;
+  pageSize: number;
+  total: number;
+  entries: LeaderboardEntry[];
+}
+
 export type AuthMode = "secret" | "jwt";
 
 export interface DashboardQuery {

@@ -80,3 +80,6 @@ footer { gap:20px; } }
 .top-players__place i { font-style:normal; }
 .top-players__place em { margin-left:6px; color:#77756f; font:normal 11px "DM Mono", monospace; }
 .top-players td.top-players__version { color:#77756f; font-size:12px; }
+.leaderboard-tabs { margin-top:16px; overflow-x:auto; }
+.leaderboard-table--loading { opacity:.5; }
+.leaderboard-pager { justify-content:flex-end; margin-top:14px; }
