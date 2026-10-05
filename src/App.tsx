@@ -23,7 +23,7 @@ import {
   selectionQuery,
   toDateInput,
 } from "./ranges";
-import type { AuthMode, Connection, DashboardData, LeaderboardPage, LeaderboardStat, LocationStats, PeriodStats, TopPlayer } from "./types";
+import type { AuthMode, Connection, DashboardData, EngagementStats, LeaderboardPage, LeaderboardStat, LocationStats, PeriodStats, TopPlayer } from "./types";
 
 const DASHBOARD_ENDPOINT =
   "https://dnodkkhbjalucwvmwhar.supabase.co/functions/v1/dashboard-stats";
@@ -318,10 +318,7 @@ function Dashboard({ connection, data, comparison, selection, onSelectionChange,
             </div>
           </article>
 
-          <article className="panel notes-panel">
-            <p className="eyebrow">READING THE DATA</p><h2>Metric notes</h2>
-            <dl><div><dt>Active</dt><dd>Completed at least one run in the rolling period.</dd></div><div><dt>Returning</dt><dd>Active now and had a run before this period. All-time uses two distinct run days.</dd></div><div><dt>Identity</dt><dd>For timed periods, named and Apple-linked counts are among active players.</dd></div><div><dt>Race time</dt><dd>Time in completed races; menus and background time are not tracked.</dd></div><div><dt>Top players</dt><dd>Ranked by days with a completed run, then runs. Counts use server-recorded races only, not imported history.</dd></div><div><dt>Leaderboards</dt><dd>All-time game leaderboards from Supabase. Players still on legacy PlayFab records are not listed.</dd></div><div><dt>Origins</dt><dd>Country and city from the IP of the player's first game open. Players who have not opened the game since tracking began have no location.</dd></div></dl>
-          </article>
+          {data.engagement && <EngagementPanels engagement={data.engagement} allTime={periodKey === "total"} />}
 
           {data.locations && <LocationPanels locations={data.locations} allTime={periodKey === "total"} />}
 
@@ -332,6 +329,91 @@ function Dashboard({ connection, data, comparison, selection, onSelectionChange,
       </main>
       <footer><span>SwipeTrack telemetry</span><span>Only top-player and leaderboard names and locations leave the API.</span></footer>
     </div>
+  );
+}
+
+function formatPercent(rate: number): string {
+  return `${formatNumber(rate * 100, 1)}%`;
+}
+
+function formatDay(value: string): string {
+  return new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function RateRow({ label, rate, count, empty }: { label: string; rate: number; count: string; empty?: boolean }) {
+  return (
+    <li>
+      <span className="rate-list__label">{label}</span>
+      <span className="rate-list__track"><i style={{ width: `${empty ? 0 : Math.min(100, rate * 100)}%` }} /></span>
+      <b>{empty ? "–" : formatPercent(rate)}</b>
+      <em>{count}</em>
+    </li>
+  );
+}
+
+function EngagementPanels({ engagement, allTime }: { engagement: EngagementStats; allTime: boolean }) {
+  const cohort = allTime ? "All players" : "Players who joined in this period";
+  const { leaderboardViews: views, notificationReturns: returns } = engagement;
+
+  return (
+    <>
+      <article className="panel notes-panel retention-panel">
+        <p className="eyebrow">COHORT RETENTION</p><h2>Who comes back</h2>
+        <p className="city-panel__coverage">{cohort}, active on day 1, 7 and 30 after joining</p>
+        <ol className="rate-list rate-list--stacked">
+          {engagement.retention.map((day) => (
+            <RateRow
+              key={day.day}
+              label={`D${day.day}`}
+              rate={day.rate}
+              empty={day.eligiblePlayers === 0}
+              count={day.eligiblePlayers === 0 ? "too early" : `${formatNumber(day.retainedPlayers)} of ${formatNumber(day.eligiblePlayers)}`}
+            />
+          ))}
+        </ol>
+      </article>
+
+      <article className="panel panel--wide">
+        <div className="panel__heading"><div><p className="eyebrow">NEW PLAYER FUNNEL</p><h2>How far new players run</h2></div><p className="panel__note">{cohort}, runs to date</p></div>
+        <div className="funnel-summary">
+          <div><strong>{formatNumber(engagement.runsPerNewPlayer, 1)}</strong><span>runs per new player</span></div>
+          <div><strong>{formatNumber(engagement.newPlayers)}</strong><span>new players</span></div>
+          <div><strong>{formatNumber(engagement.newPlayerRuns)}</strong><span>runs completed</span></div>
+        </div>
+        <ol className="rate-list">
+          {engagement.runMilestones.map((milestone) => (
+            <RateRow
+              key={milestone.runs}
+              label={`${milestone.runs}+ ${milestone.runs === 1 ? "run" : "runs"}`}
+              rate={milestone.rate}
+              empty={engagement.newPlayers === 0}
+              count={`${formatNumber(milestone.players)} players`}
+            />
+          ))}
+        </ol>
+      </article>
+
+      <article className="panel identity-panel leaderboard-pull">
+        <p className="eyebrow">LEADERBOARD PULL</p><h2>Rankings & rank alerts</h2>
+        <div className="pull-stat">
+          <strong>{views.trackingSince ? formatPercent(views.rate) : "–"}</strong>
+          <span>viewed the leaderboard</span>
+          <p>{views.trackingSince
+            ? `${formatNumber(views.viewers)} of ${formatNumber(views.activePlayers)} active players. Collecting since ${formatDay(views.trackingSince)}.`
+            : "Collecting from the next game update."}</p>
+        </div>
+        <div className="pull-stat">
+          <strong>{returns.notifiedPlayers ? formatPercent(returns.rate) : "–"}</strong>
+          <span>returned within {returns.windowHours} h of a rank alert</span>
+          <p>{returns.notifiedPlayers
+            ? `${formatNumber(returns.returnedPlayers)} of ${formatNumber(returns.notifiedPlayers)} alerted players ran or opened the game.`
+            : "No rank alerts sent in this period."}{" "}
+            {returns.appOpensTrackingSince
+              ? `Game opens count since ${formatDay(returns.appOpensTrackingSince)}; before that, only runs.`
+              : "Game opens are collecting from now; until then, only runs count."}</p>
+        </div>
+      </article>
+    </>
   );
 }
 

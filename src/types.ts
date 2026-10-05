@@ -65,6 +65,53 @@ export interface TopPlayer {
   latestVersion?: string | null;
 }
 
+export interface RetentionDay {
+  /** Days after sign-up: 1, 7 or 30. */
+  day: number;
+  /** Players in the cohort whose day N has fully passed. */
+  eligiblePlayers: number;
+  /** Eligible players who ran or opened the game during day N. */
+  retainedPlayers: number;
+  rate: number;
+}
+
+export interface RunMilestone {
+  runs: number;
+  /** New players with at least `runs` completed runs to date. */
+  players: number;
+  rate: number;
+}
+
+/**
+ * Cohort and engagement metrics. The cohort is players who signed up in the selected range
+ * (everyone for all time); leaderboard and notification figures are for activity in the range.
+ */
+export interface EngagementStats {
+  retention: RetentionDay[];
+  newPlayers: number;
+  newPlayerRuns: number;
+  runsPerNewPlayer: number;
+  runMilestones: RunMilestone[];
+  leaderboardViews: {
+    viewers: number;
+    /** Players who ran or opened the game in the range. */
+    activePlayers: number;
+    rate: number;
+    /** First recorded leaderboard view; null until a game build that reports them is used. */
+    trackingSince: string | null;
+  };
+  notificationReturns: {
+    /** Players sent a leaderboard rank alert in the range. */
+    notifiedPlayers: number;
+    /** Notified players who ran or opened the game within `windowHours` of an alert. */
+    returnedPlayers: number;
+    rate: number;
+    windowHours: number;
+    /** First recorded game open; earlier returns are counted from runs only. */
+    appOpensTrackingSince: string | null;
+  };
+}
+
 export interface DashboardData {
   generatedAt: string;
   timezone: string;
@@ -74,6 +121,8 @@ export interface DashboardData {
   locations?: LocationStats;
   /** Top ten by days active, then runs. Absent from API deployments that predate it. */
   topPlayers?: TopPlayer[];
+  /** Absent from API deployments that predate engagement tracking. */
+  engagement?: EngagementStats;
 }
 
 export type LeaderboardStat =

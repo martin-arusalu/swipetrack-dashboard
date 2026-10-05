@@ -64,6 +64,17 @@ speed, and total distance), 100 rows per page. Boards are all time and ignore th
 They read Supabase leaderboard entries only, so players still on legacy PlayFab records are not
 listed and the game may show those players where the dashboard does not.
 
+Cohort retention and the new-player funnel follow players who signed up in the selected period
+(everyone for all time). D1, D7 and D30 are the share who completed a run or opened the game during
+the 24 hours that start 1, 7 or 30 days after sign-up, counted only among players whose day has
+already ended. Game opens are recorded from October 2026, so earlier retention counts runs only.
+Runs per new player and the 1 / 5 / 10 / 25 run shares use each new player's runs to date.
+
+The leaderboard panel shows the share of players active in the period (ran or opened the game) who
+opened the game's Rankings tab, collected from the first game build that reports it, and the share
+of players sent a leaderboard rank alert in the period who ran or opened the game within 24 hours
+of an alert.
+
 Metric cards compare the selected period with its immediately preceding equivalent and show both
 absolute and percentage change. All time has no comparison, and growth from a zero baseline is
 shown as “new” because a percentage change is undefined.
