@@ -23,7 +23,7 @@ import {
   selectionQuery,
   toDateInput,
 } from "./ranges";
-import type { AuthMode, Connection, DashboardData, EngagementStats, LeaderboardPage, LeaderboardStat, LocationStats, PeriodStats, TopPlayer } from "./types";
+import type { AuthMode, Connection, DashboardData, EngagementStats, LeaderboardPage, LeaderboardStat, LocationStats, PeriodStats, Platform, PlatformStats, TopPlayer } from "./types";
 
 const DASHBOARD_ENDPOINT =
   "https://dnodkkhbjalucwvmwhar.supabase.co/functions/v1/dashboard-stats";
@@ -320,6 +320,8 @@ function Dashboard({ connection, data, comparison, selection, onSelectionChange,
 
           {data.engagement && <EngagementPanels engagement={data.engagement} allTime={periodKey === "total"} />}
 
+          {data.platforms && <PlatformPanels platforms={data.platforms} allTime={periodKey === "total"} />}
+
           {data.locations && <LocationPanels locations={data.locations} allTime={periodKey === "total"} />}
 
           {data.topPlayers && <TopPlayersPanel players={data.topPlayers} allTime={periodKey === "total"} />}
@@ -327,7 +329,7 @@ function Dashboard({ connection, data, comparison, selection, onSelectionChange,
           <LeaderboardPanel connection={connection} refreshKey={data.generatedAt} />
         </section>
       </main>
-      <footer><span>SwipeTrack telemetry</span><span>Only top-player and leaderboard names and locations leave the API.</span></footer>
+      <footer><span>SwipeTrack telemetry</span><span>Only top-player, leaderboard and Android tester names and locations leave the API.</span></footer>
     </div>
   );
 }
@@ -468,6 +470,55 @@ function LocationPanels({ locations, allTime }: { locations: LocationStats; allT
   );
 }
 
+const PLATFORM_NAMES: Record<Platform, string> = { ios: "iOS", android: "Android", editor: "Unity Editor", other: "Other" };
+
+function platformName(platform: Platform | null): string {
+  return platform ? PLATFORM_NAMES[platform] : "Not reported";
+}
+
+function PlatformPanels({ platforms, allTime }: { platforms: PlatformStats; allTime: boolean }) {
+  const top = Math.max(0, ...platforms.platforms.map((platform) => platform.players));
+  const scope = allTime ? "All players" : "Players who ran or opened the game in this period";
+
+  return (
+    <>
+      <article className="panel panel--wide">
+        <div className="panel__heading"><div><p className="eyebrow">PLATFORMS</p><h2>iOS and Android players</h2></div><p className="panel__note">{scope}, by their latest game open</p></div>
+        {platforms.platforms.length === 0
+          ? <p className="empty-note">No players in this period.</p>
+          : (
+            <ol className="country-list">
+              {platforms.platforms.map((platform) => (
+                <li key={platform.platform ?? "unknown"}>
+                  <span className="country-list__name">{platformName(platform.platform)}</span>
+                  <span className="country-list__track"><i style={{ width: `${top ? (platform.players / top) * 100 : 0}%` }} /></span>
+                  <b>{formatNumber(platform.players)}</b>
+                  <em>{formatNumber(platforms.players ? (platform.players / platforms.players) * 100 : 0, 0)}%</em>
+                  <small className="platform-versions">{platform.versions.slice(0, 6).map((version) => `${version.version ?? "unknown"} × ${formatNumber(version.players)}`).join(" · ")}</small>
+                </li>
+              ))}
+            </ol>
+          )}
+        <p className="panel__note">Builds before platform reporting show as “Not reported” until the player updates.</p>
+      </article>
+
+      <article className="panel notes-panel city-panel">
+        <p className="eyebrow">ANDROID TESTERS</p><h2>{formatNumber(platforms.androidPlayers.length)} Android {platforms.androidPlayers.length === 1 ? "player" : "players"}</h2>
+        <p className="city-panel__coverage">Most recently opened first, with the version they last opened</p>
+        {platforms.androidPlayers.length === 0
+          ? <p className="empty-note">No Android players yet.</p>
+          : (
+            <ol>
+              {platforms.androidPlayers.slice(0, 15).map((player) => (
+                <li key={player.displayName} title={`Last opened ${formatDay(player.lastOpenedAt)}`}><span>{player.displayName}</span><b>{player.appVersion ?? "–"}</b></li>
+              ))}
+            </ol>
+          )}
+      </article>
+    </>
+  );
+}
+
 function TopPlayersPanel({ players, allTime }: { players: TopPlayer[]; allTime: boolean }) {
   return (
     <article className="panel panel--full">
@@ -478,7 +529,7 @@ function TopPlayersPanel({ players, allTime }: { players: TopPlayer[]; allTime: 
           <div className="top-players">
             <table>
               <thead>
-                <tr><th scope="col">#</th><th scope="col">Player</th><th scope="col">Country</th><th scope="col">Days active</th><th scope="col">Runs</th><th scope="col">Distance</th><th scope="col">Streak</th><th scope="col">Version</th></tr>
+                <tr><th scope="col">#</th><th scope="col">Player</th><th scope="col">Country</th><th scope="col">Days active</th><th scope="col">Runs</th><th scope="col">Distance</th><th scope="col">Streak</th><th scope="col">Platform</th><th scope="col">Version</th></tr>
               </thead>
               <tbody>
                 {players.map((player, index) => (
@@ -492,6 +543,7 @@ function TopPlayersPanel({ players, allTime }: { players: TopPlayer[]; allTime: 
                     <td>{formatNumber(player.runs)}</td>
                     <td>{formatDistance(player.distanceMeters)}</td>
                     <td>{player.currentStreakDays > 0 ? `${formatNumber(player.currentStreakDays)} ${player.currentStreakDays === 1 ? "day" : "days"}` : "–"}</td>
+                    <td>{player.platform ? platformName(player.platform) : "–"}</td>
                     <td className="top-players__version">{player.latestVersion ?? "–"}</td>
                   </tr>
                 ))}

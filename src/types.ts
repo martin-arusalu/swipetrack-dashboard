@@ -63,6 +63,32 @@ export interface TopPlayer {
   city?: string | null;
   /** Client version from the player's most recent run, in any period. Absent from older API deployments. */
   latestVersion?: string | null;
+  /** From the player's latest game open; null for builds that predate platform reporting. */
+  platform?: Platform | null;
+}
+
+export type Platform = "ios" | "android" | "editor" | "other";
+
+export interface PlatformCount {
+  /** Null for players whose game build does not report its platform yet. */
+  platform: Platform | null;
+  players: number;
+  /** Game version from each player's latest open, most common first. */
+  versions: { version: string | null; players: number }[];
+}
+
+export interface AndroidPlayer {
+  displayName: string;
+  appVersion: string | null;
+  lastOpenedAt: string;
+}
+
+/** Players who ran or opened the game in the selected range, or every player for all time. */
+export interface PlatformStats {
+  players: number;
+  platforms: PlatformCount[];
+  /** The 50 most recently seen Android players. */
+  androidPlayers: AndroidPlayer[];
 }
 
 export interface RetentionDay {
@@ -123,6 +149,8 @@ export interface DashboardData {
   topPlayers?: TopPlayer[];
   /** Absent from API deployments that predate engagement tracking. */
   engagement?: EngagementStats;
+  /** Absent from API deployments that predate platform tracking. */
+  platforms?: PlatformStats;
 }
 
 export type LeaderboardStat =
