@@ -14,6 +14,7 @@ export interface PeriodStats {
   retentionRate: number;
   playersWithDisplayNames: number;
   appleLinkedPlayers: number;
+  googleLinkedPlayers?: number;
   distanceMeters: number;
   raceTimeMs: number;
   personalBests: number;

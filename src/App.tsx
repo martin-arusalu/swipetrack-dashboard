@@ -247,6 +247,8 @@ function Dashboard({ connection, data, comparison, selection, onSelectionChange,
   const trend = data.trend.map((point) => ({ ...point, label: dateLabel(point.date) }));
   const nameShare = selected.activePlayers ? selected.playersWithDisplayNames / selected.activePlayers : 0;
   const appleShare = selected.activePlayers ? selected.appleLinkedPlayers / selected.activePlayers : 0;
+  const googleLinkedPlayers = selected.googleLinkedPlayers ?? 0;
+  const googleShare = selected.activePlayers ? googleLinkedPlayers / selected.activePlayers : 0;
   const comparisonText = previousPeriodLabel(selection);
 
   return (
@@ -301,6 +303,8 @@ function Dashboard({ connection, data, comparison, selection, onSelectionChange,
             <div className="share-track"><i style={{ width: `${Math.min(100, nameShare * 100)}%` }} /></div>
             <div className="share-row"><span>Apple linked</span><b>{formatNumber(selected.appleLinkedPlayers)}</b><em>{formatNumber(appleShare * 100, 0)}%</em></div>
             <div className="share-track share-track--dark"><i style={{ width: `${Math.min(100, appleShare * 100)}%` }} /></div>
+            <div className="share-row"><span>Google linked</span><b>{formatNumber(googleLinkedPlayers)}</b><em>{formatNumber(googleShare * 100, 0)}%</em></div>
+            <div className="share-track share-track--dark"><i style={{ width: `${Math.min(100, googleShare * 100)}%` }} /></div>
           </article>
 
           <article className="panel panel--wide">
