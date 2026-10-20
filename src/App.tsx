@@ -678,7 +678,7 @@ function readSession(): Connection | null {
 export default function App() {
   const initialConnection = useMemo(readSession, []);
   const [connection, setConnection] = useState<Connection | null>(initialConnection);
-  const [selection, setSelection] = useState<Selection>({ mode: "calendar", unit: "week", offset: 0 });
+  const [selection, setSelection] = useState<Selection>({ mode: "calendar", unit: "day", offset: 0 });
   const [data, setData] = useState<DashboardData | null>(null);
   const [comparison, setComparison] = useState<PeriodStats | null>(null);
   const [busy, setBusy] = useState(Boolean(initialConnection));
