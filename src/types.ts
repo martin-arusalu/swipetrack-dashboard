@@ -154,6 +154,35 @@ export interface DashboardData {
   platforms?: PlatformStats;
   /** Absent from API deployments that predate weekday and hour-of-day stats. */
   activityPatterns?: ActivityPatterns;
+  /** Absent from API deployments that predate the feedback prompt. */
+  feedback?: FeedbackStats;
+}
+
+export type FeedbackRating = "happy" | "neutral" | "sad";
+
+export interface FeedbackMessage {
+  /** Null if the player's profile is gone. */
+  displayName: string | null;
+  /** Null when the player wrote without picking a face. */
+  rating: FeedbackRating | null;
+  message: string;
+  platform: Platform | null;
+  appVersion: string | null;
+  createdAt: string;
+}
+
+/** Answers to the fifth-race feedback sheet first given in the selected range (all time when none). */
+export interface FeedbackStats {
+  /** Players who were shown the sheet. */
+  prompts: number;
+  happy: number;
+  neutral: number;
+  sad: number;
+  /** Closed without picking a face. */
+  dismissed: number;
+  messageCount: number;
+  /** The 200 newest written messages, newest first. */
+  messages: FeedbackMessage[];
 }
 
 /** Activity in one weekday or hour bucket. Active players have a run in that bucket. */

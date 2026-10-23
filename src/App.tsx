@@ -23,7 +23,7 @@ import {
   selectionQuery,
   toDateInput,
 } from "./ranges";
-import type { ActivityBucket, ActivityPatterns, AuthMode, Connection, DashboardData, EngagementStats, LeaderboardPage, LeaderboardStat, LocationStats, PeriodStats, Platform, PlatformStats, TopPlayer } from "./types";
+import type { ActivityBucket, ActivityPatterns, AuthMode, Connection, DashboardData, EngagementStats, FeedbackRating, FeedbackStats, LeaderboardPage, LeaderboardStat, LocationStats, PeriodStats, Platform, PlatformStats, TopPlayer } from "./types";
 
 const DASHBOARD_ENDPOINT =
   "https://dnodkkhbjalucwvmwhar.supabase.co/functions/v1/dashboard-stats";
@@ -326,6 +326,8 @@ function Dashboard({ connection, data, comparison, selection, onSelectionChange,
 
           {data.engagement && <EngagementPanels engagement={data.engagement} allTime={periodKey === "total"} />}
 
+          {data.feedback && <FeedbackPanels feedback={data.feedback} allTime={periodKey === "total"} />}
+
           {data.platforms && <PlatformPanels platforms={data.platforms} allTime={periodKey === "total"} />}
 
           {data.locations && <LocationPanels locations={data.locations} allTime={periodKey === "total"} />}
@@ -335,7 +337,7 @@ function Dashboard({ connection, data, comparison, selection, onSelectionChange,
           <LeaderboardPanel connection={connection} refreshKey={data.generatedAt} />
         </section>
       </main>
-      <footer><span>SwipeTrack telemetry</span><span>Only top-player, leaderboard and Android tester names and locations leave the API.</span></footer>
+      <footer><span>SwipeTrack telemetry</span><span>Only top-player, leaderboard, feedback and Android tester names and locations leave the API.</span></footer>
     </div>
   );
 }
@@ -532,6 +534,69 @@ function LocationPanels({ locations, allTime }: { locations: LocationStats; allT
 }
 
 const PLATFORM_NAMES: Record<Platform, string> = { ios: "iOS", android: "Android", editor: "Unity Editor", other: "Other" };
+
+const FEEDBACK_FACES: Record<FeedbackRating, string> = { happy: "😀", neutral: "😐", sad: "🙁" };
+
+function FeedbackPanels({ feedback, allTime }: { feedback: FeedbackStats; allTime: boolean }) {
+  const scope = allTime ? "All players" : "Players first asked in this period";
+  const answered = feedback.happy + feedback.neutral + feedback.sad;
+  const rows: { label: string; count: number }[] = [
+    { label: FEEDBACK_FACES.happy, count: feedback.happy },
+    { label: FEEDBACK_FACES.neutral, count: feedback.neutral },
+    { label: FEEDBACK_FACES.sad, count: feedback.sad },
+    { label: "Closed", count: feedback.dismissed },
+  ];
+
+  return (
+    <>
+      <article className="panel panel--wide">
+        <div className="panel__heading"><div><p className="eyebrow">PLAYER FEEDBACK</p><h2>How players like SwipeTrack</h2></div><p className="panel__note">{scope}, asked once after their fifth race</p></div>
+        {feedback.prompts === 0
+          ? <p className="empty-note">No feedback in this period.</p>
+          : (
+            <ul className="rate-list feedback-counts">
+              {rows.map((row) => (
+                <RateRow key={row.label} label={row.label} rate={row.count / feedback.prompts} count={`${formatNumber(row.count)} of ${formatNumber(feedback.prompts)}`} />
+              ))}
+            </ul>
+          )}
+      </article>
+
+      <article className="panel identity-panel leaderboard-pull">
+        <p className="eyebrow">ANSWERS</p><h2>{formatNumber(feedback.prompts)} asked</h2>
+        <div className="pull-stat">
+          <strong>{answered ? formatPercent(feedback.happy / answered) : "–"}</strong>
+          <span>Happy</span>
+          <p>Share of the {formatNumber(answered)} players who picked a face.</p>
+        </div>
+        <div className="pull-stat">
+          <strong>{formatNumber(feedback.messageCount)}</strong>
+          <span>Written {feedback.messageCount === 1 ? "message" : "messages"}</span>
+          <p>Up to 500 characters, optional after any face.</p>
+        </div>
+      </article>
+
+      <article className="panel panel--full">
+        <div className="panel__heading"><div><p className="eyebrow">WHAT PLAYERS WROTE</p><h2>Feedback messages</h2></div><p className="panel__note">Newest first{feedback.messageCount > feedback.messages.length ? `, latest ${formatNumber(feedback.messages.length)}` : ""}</p></div>
+        {feedback.messages.length === 0
+          ? <p className="empty-note">No written feedback in this period.</p>
+          : (
+            <ol className="feedback-messages">
+              {feedback.messages.map((entry) => (
+                <li key={`${entry.createdAt}-${entry.displayName}`}>
+                  <span className="feedback-messages__face" aria-label={entry.rating ?? "no face"}>{entry.rating ? FEEDBACK_FACES[entry.rating] : "–"}</span>
+                  <div>
+                    <p>{entry.message}</p>
+                    <small><b>{entry.displayName ?? "Deleted player"}</b> · {formatDay(entry.createdAt)}{entry.platform && ` · ${platformName(entry.platform)}`}{entry.appVersion && ` ${entry.appVersion}`}</small>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
+      </article>
+    </>
+  );
+}
 
 function platformName(platform: Platform | null): string {
   return platform ? PLATFORM_NAMES[platform] : "Not reported";
