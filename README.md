@@ -75,6 +75,11 @@ opened the game's Rankings tab, collected from the first game build that reports
 of players sent a leaderboard rank alert in the period who ran or opened the game within 24 hours
 of an alert.
 
+The weekday and hour-of-day charts bucket the selected period (the rolling window for rolling views)
+in Estonian time (Europe/Tallinn), whatever the viewer's timezone. Active players are distinct
+players with a run in that bucket, logins are game opens (at most one per player per five minutes,
+recorded from October 2026), and new players are sign-ups.
+
 Metric cards compare the selected period with its immediately preceding equivalent and show both
 absolute and percentage change. All time has no comparison, and growth from a zero baseline is
 shown as “new” because a percentage change is undefined.

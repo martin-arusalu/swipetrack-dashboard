@@ -23,7 +23,7 @@ import {
   selectionQuery,
   toDateInput,
 } from "./ranges";
-import type { AuthMode, Connection, DashboardData, EngagementStats, LeaderboardPage, LeaderboardStat, LocationStats, PeriodStats, Platform, PlatformStats, TopPlayer } from "./types";
+import type { ActivityBucket, ActivityPatterns, AuthMode, Connection, DashboardData, EngagementStats, LeaderboardPage, LeaderboardStat, LocationStats, PeriodStats, Platform, PlatformStats, TopPlayer } from "./types";
 
 const DASHBOARD_ENDPOINT =
   "https://dnodkkhbjalucwvmwhar.supabase.co/functions/v1/dashboard-stats";
@@ -322,6 +322,8 @@ function Dashboard({ connection, data, comparison, selection, onSelectionChange,
             </div>
           </article>
 
+          {data.activityPatterns && <ActivityPatternPanels patterns={data.activityPatterns} allTime={periodKey === "total"} />}
+
           {data.engagement && <EngagementPanels engagement={data.engagement} allTime={periodKey === "total"} />}
 
           {data.platforms && <PlatformPanels platforms={data.platforms} allTime={periodKey === "total"} />}
@@ -354,6 +356,61 @@ function RateRow({ label, rate, count, empty }: { label: string; rate: number; c
       <b>{empty ? "–" : formatPercent(rate)}</b>
       <em>{count}</em>
     </li>
+  );
+}
+
+const ACTIVITY_METRICS: { key: keyof ActivityBucket; label: string }[] = [
+  { key: "activePlayers", label: "Active players" },
+  { key: "runs", label: "Runs" },
+  { key: "logins", label: "Logins" },
+  { key: "newPlayers", label: "New players" },
+];
+
+const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+function ActivityPatternPanels({ patterns, allTime }: { patterns: ActivityPatterns; allTime: boolean }) {
+  const scope = allTime ? "All time" : "In this period";
+  return (
+    <>
+      <ActivityPatternChart
+        eyebrow="BY WEEKDAY"
+        heading="Which days players run"
+        note={`${scope}, Estonian time`}
+        data={patterns.weekdays.map((bucket) => ({ ...bucket, label: WEEKDAY_LABELS[bucket.weekday - 1] }))}
+      />
+      <ActivityPatternChart
+        eyebrow="BY HOUR OF DAY"
+        heading="When players run"
+        note={`${scope}, Estonian time`}
+        data={patterns.hours.map((bucket) => ({ ...bucket, label: String(bucket.hour).padStart(2, "0") }))}
+      />
+    </>
+  );
+}
+
+function ActivityPatternChart({ eyebrow, heading, note, data }: { eyebrow: string; heading: string; note: string; data: (ActivityBucket & { label: string })[] }) {
+  const [metric, setMetric] = useState<keyof ActivityBucket>("activePlayers");
+  const definition = ACTIVITY_METRICS.find((entry) => entry.key === metric) ?? ACTIVITY_METRICS[0];
+  return (
+    <article className="panel panel--full">
+      <div className="panel__heading"><div><p className="eyebrow">{eyebrow}</p><h2>{heading}</h2></div><p className="panel__note">{note}</p></div>
+      <nav className="period-tabs period-tabs--muted leaderboard-tabs" aria-label={`${heading} metric`}>
+        {ACTIVITY_METRICS.map((entry) => (
+          <button key={entry.key} className={entry.key === metric ? "active" : ""} onClick={() => setMetric(entry.key)}>{entry.label}</button>
+        ))}
+      </nav>
+      <div className="profile-chart">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={{ top: 12, right: 8, left: -20, bottom: 0 }}>
+            <CartesianGrid stroke="#d7d3ca" strokeDasharray="2 7" vertical={false} />
+            <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#565650", fontSize: 11, fontWeight: 700 }} />
+            <YAxis axisLine={false} tickLine={false} allowDecimals={false} tick={{ fill: "#77746e", fontSize: 11 }} />
+            <Tooltip cursor={{ fill: "#eeebe3" }} contentStyle={{ background: "#171916", color: "#fff", border: 0, borderRadius: 4 }} labelStyle={{ color: "#b7ff46" }} formatter={(value) => [formatNumber(Number(value)), definition.label]} />
+            <Bar dataKey={metric} fill="#b7ff46" stroke="#171916" strokeWidth={1.5} radius={[3, 3, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </article>
   );
 }
 

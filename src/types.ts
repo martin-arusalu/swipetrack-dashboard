@@ -152,6 +152,25 @@ export interface DashboardData {
   engagement?: EngagementStats;
   /** Absent from API deployments that predate platform tracking. */
   platforms?: PlatformStats;
+  /** Absent from API deployments that predate weekday and hour-of-day stats. */
+  activityPatterns?: ActivityPatterns;
+}
+
+/** Activity in one weekday or hour bucket. Active players have a run in that bucket. */
+export interface ActivityBucket {
+  activePlayers: number;
+  runs: number;
+  /** App opens, deduplicated to one per player per five minutes. */
+  logins: number;
+  newPlayers: number;
+}
+
+/** Activity by weekday and hour of day in `timezone` (Europe/Tallinn) for the selected range. */
+export interface ActivityPatterns {
+  timezone: string;
+  /** ISO weekday: 1 = Monday through 7 = Sunday. */
+  weekdays: (ActivityBucket & { weekday: number })[];
+  hours: (ActivityBucket & { hour: number })[];
 }
 
 export type LeaderboardStat =
