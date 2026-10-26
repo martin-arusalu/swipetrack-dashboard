@@ -245,7 +245,6 @@ function Dashboard({ connection, data, comparison, selection, onSelectionChange,
     .map(([distance, runs]) => ({ distance: Number(distance), label: Number(distance) >= 1_000 ? `${Number(distance) / 1_000}k` : distance, runs }))
     .sort((a, b) => a.distance - b.distance);
   const trend = data.trend.map((point) => ({ ...point, label: dateLabel(point.date) }));
-  const nameShare = selected.activePlayers ? selected.playersWithDisplayNames / selected.activePlayers : 0;
   const appleShare = selected.activePlayers ? selected.appleLinkedPlayers / selected.activePlayers : 0;
   const googleLinkedPlayers = selected.googleLinkedPlayers ?? 0;
   const googleShare = selected.activePlayers ? googleLinkedPlayers / selected.activePlayers : 0;
@@ -299,8 +298,6 @@ function Dashboard({ connection, data, comparison, selection, onSelectionChange,
           <article className="panel identity-panel">
             <div className="panel__heading"><div><p className="eyebrow">PLAYER SIGNAL</p><h2>Identity & return</h2></div></div>
             <Ring value={selected.retentionRate} label="Retention" />
-            <div className="share-row"><span>Named profiles</span><b>{formatNumber(selected.playersWithDisplayNames)}</b><em>{formatNumber(nameShare * 100, 0)}%</em></div>
-            <div className="share-track"><i style={{ width: `${Math.min(100, nameShare * 100)}%` }} /></div>
             <div className="share-row"><span>Apple linked</span><b>{formatNumber(selected.appleLinkedPlayers)}</b><em>{formatNumber(appleShare * 100, 0)}%</em></div>
             <div className="share-track share-track--dark"><i style={{ width: `${Math.min(100, appleShare * 100)}%` }} /></div>
             <div className="share-row"><span>Google linked</span><b>{formatNumber(googleLinkedPlayers)}</b><em>{formatNumber(googleShare * 100, 0)}%</em></div>
@@ -328,9 +325,12 @@ function Dashboard({ connection, data, comparison, selection, onSelectionChange,
 
           {data.feedback && <FeedbackPanels feedback={data.feedback} allTime={periodKey === "total"} />}
 
-          {data.platforms && <PlatformPanels platforms={data.platforms} allTime={periodKey === "total"} />}
-
-          {data.locations && <LocationPanels locations={data.locations} allTime={periodKey === "total"} />}
+          {(data.platforms || data.locations) && (
+            <div className="panel-pair">
+              {data.platforms && <PlatformPanel platforms={data.platforms} allTime={periodKey === "total"} />}
+              {data.locations && <LocationPanel locations={data.locations} allTime={periodKey === "total"} />}
+            </div>
+          )}
 
           {data.topPlayers && <TopPlayersPanel players={data.topPlayers} allTime={periodKey === "total"} />}
 
@@ -492,44 +492,46 @@ function countryFlag(code: string): string {
   return String.fromCodePoint(...[...code.toUpperCase()].map((letter) => 0x1f1e6 + letter.charCodeAt(0) - 65));
 }
 
-function LocationPanels({ locations, allTime }: { locations: LocationStats; allTime: boolean }) {
-  const countries = locations.countries.slice(0, 12);
-  const top = countries[0]?.players ?? 0;
+const ORIGIN_VIEWS = [
+  { key: "countries", label: "Countries" },
+  { key: "cities", label: "Cities" },
+] as const;
+
+function LocationPanel({ locations, allTime }: { locations: LocationStats; allTime: boolean }) {
+  const [view, setView] = useState<"countries" | "cities">("countries");
+  const all = view === "countries"
+    ? locations.countries.map((country) => ({ key: country.countryCode, countryCode: country.countryCode, name: countryName(country.countryCode), players: country.players }))
+    : locations.cities.map((city) => ({ key: `${city.countryCode}-${city.city}`, countryCode: city.countryCode, name: city.city, players: city.players }));
+  const rows = all.slice(0, 12);
+  const top = rows[0]?.players ?? 0;
   const known = locations.playersWithLocation;
   const population = known + locations.playersWithoutLocation;
   const scope = allTime ? "All players" : "Players who raced in this period";
 
   return (
-    <>
-      <article className="panel panel--wide">
-        <div className="panel__heading"><div><p className="eyebrow">PLAYER ORIGINS</p><h2>Where players come from</h2></div><p className="panel__note">{scope}, by country</p></div>
-        {countries.length === 0
-          ? <p className="empty-note">No player locations yet.</p>
-          : (
-            <ol className="country-list">
-              {countries.map((country) => (
-                <li key={country.countryCode}>
-                  <span className="country-list__name"><i aria-hidden="true">{countryFlag(country.countryCode)}</i>{countryName(country.countryCode)}</span>
-                  <span className="country-list__track"><i style={{ width: `${top ? (country.players / top) * 100 : 0}%` }} /></span>
-                  <b>{formatNumber(country.players)}</b>
-                  <em>{formatNumber(known ? (country.players / known) * 100 : 0, 0)}%</em>
-                </li>
-              ))}
-            </ol>
-          )}
-        {locations.countries.length > countries.length && <p className="panel__note">+{formatNumber(locations.countries.length - countries.length)} more countries</p>}
-      </article>
-
-      <article className="panel notes-panel city-panel">
-        <p className="eyebrow">TOP CITIES</p><h2>{formatNumber(locations.countries.length)} countries</h2>
-        <p className="city-panel__coverage">{formatNumber(known)} of {formatNumber(population)} players have a known location</p>
-        <ol>
-          {locations.cities.slice(0, 10).map((city) => (
-            <li key={`${city.countryCode}-${city.city}`}><span>{countryFlag(city.countryCode)} {city.city}</span><b>{formatNumber(city.players)}</b></li>
-          ))}
-        </ol>
-      </article>
-    </>
+    <article className="panel">
+      <div className="panel__heading"><div><p className="eyebrow">PLAYER ORIGINS</p><h2>Where players come from</h2></div><p className="panel__note">{scope}. {formatNumber(known)} of {formatNumber(population)} have a known location</p></div>
+      <nav className="period-tabs period-tabs--muted leaderboard-tabs" aria-label="Origin view">
+        {ORIGIN_VIEWS.map((entry) => (
+          <button key={entry.key} className={entry.key === view ? "active" : ""} onClick={() => setView(entry.key)}>{entry.label}</button>
+        ))}
+      </nav>
+      {rows.length === 0
+        ? <p className="empty-note">No player locations yet.</p>
+        : (
+          <ol className="country-list">
+            {rows.map((row) => (
+              <li key={row.key}>
+                <span className="country-list__name"><i aria-hidden="true">{countryFlag(row.countryCode)}</i>{row.name}</span>
+                <span className="country-list__track"><i style={{ width: `${top ? (row.players / top) * 100 : 0}%` }} /></span>
+                <b>{formatNumber(row.players)}</b>
+                <em>{formatNumber(known ? (row.players / known) * 100 : 0, 0)}%</em>
+              </li>
+            ))}
+          </ol>
+        )}
+      {all.length > rows.length && <p className="panel__note">+{formatNumber(all.length - rows.length)} more {view}</p>}
+    </article>
   );
 }
 
@@ -548,53 +550,45 @@ function FeedbackPanels({ feedback, allTime }: { feedback: FeedbackStats; allTim
   ];
 
   return (
-    <>
-      <article className="panel panel--wide">
-        <div className="panel__heading"><div><p className="eyebrow">PLAYER FEEDBACK</p><h2>How players like SwipeTrack</h2></div><p className="panel__note">{scope}, asked once after their fifth race</p></div>
-        {feedback.prompts === 0
-          ? <p className="empty-note">No feedback in this period.</p>
-          : (
-            <ul className="rate-list feedback-counts">
-              {rows.map((row) => (
-                <RateRow key={row.label} label={row.label} rate={row.count / feedback.prompts} count={`${formatNumber(row.count)} of ${formatNumber(feedback.prompts)}`} />
-              ))}
-            </ul>
-          )}
-      </article>
-
-      <article className="panel identity-panel leaderboard-pull">
-        <p className="eyebrow">ANSWERS</p><h2>{formatNumber(feedback.prompts)} asked</h2>
-        <div className="pull-stat">
-          <strong>{answered ? formatPercent(feedback.happy / answered) : "–"}</strong>
-          <span>Happy</span>
-          <p>Share of the {formatNumber(answered)} players who picked a face.</p>
-        </div>
-        <div className="pull-stat">
-          <strong>{formatNumber(feedback.messageCount)}</strong>
-          <span>Written {feedback.messageCount === 1 ? "message" : "messages"}</span>
-          <p>Up to 500 characters, optional after any face.</p>
-        </div>
-      </article>
-
-      <article className="panel panel--full">
-        <div className="panel__heading"><div><p className="eyebrow">WHAT PLAYERS WROTE</p><h2>Feedback messages</h2></div><p className="panel__note">Newest first{feedback.messageCount > feedback.messages.length ? `, latest ${formatNumber(feedback.messages.length)}` : ""}</p></div>
-        {feedback.messages.length === 0
-          ? <p className="empty-note">No written feedback in this period.</p>
-          : (
-            <ol className="feedback-messages">
-              {feedback.messages.map((entry) => (
-                <li key={`${entry.createdAt}-${entry.displayName}`}>
-                  <span className="feedback-messages__face" aria-label={entry.rating ?? "no face"}>{entry.rating ? FEEDBACK_FACES[entry.rating] : "–"}</span>
-                  <div>
-                    <p>{entry.message}</p>
-                    <small><b>{entry.displayName ?? "Deleted player"}</b> · {formatDay(entry.createdAt)}{entry.platform && ` · ${platformName(entry.platform)}`}{entry.appVersion && ` ${entry.appVersion}`}</small>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          )}
-      </article>
-    </>
+    <article className="panel panel--full">
+      <div className="panel__heading"><div><p className="eyebrow">PLAYER FEEDBACK</p><h2>How players like SwipeTrack</h2></div><p className="panel__note">{scope}, asked once after their fifth race</p></div>
+      {feedback.prompts === 0
+        ? <p className="empty-note">No feedback in this period.</p>
+        : (
+          <div className="feedback-layout">
+            <div>
+              <div className="funnel-summary">
+                <div><strong>{answered ? formatPercent(feedback.happy / answered) : "–"}</strong><span>happy of {formatNumber(answered)} who answered</span></div>
+                <div><strong>{formatNumber(feedback.prompts)}</strong><span>asked</span></div>
+                <div><strong>{formatNumber(feedback.messageCount)}</strong><span>written {feedback.messageCount === 1 ? "message" : "messages"}</span></div>
+              </div>
+              <ul className="rate-list feedback-counts">
+                {rows.map((row) => (
+                  <RateRow key={row.label} label={row.label} rate={row.count / feedback.prompts} count={`${formatNumber(row.count)} of ${formatNumber(feedback.prompts)}`} />
+                ))}
+              </ul>
+            </div>
+            <div>
+              <p className="eyebrow feedback-layout__label">What players wrote · newest first{feedback.messageCount > feedback.messages.length ? `, latest ${formatNumber(feedback.messages.length)}` : ""}</p>
+              {feedback.messages.length === 0
+                ? <p className="empty-note">No written feedback in this period.</p>
+                : (
+                  <ol className="feedback-messages">
+                    {feedback.messages.map((entry) => (
+                      <li key={`${entry.createdAt}-${entry.displayName}`}>
+                        <span className="feedback-messages__face" aria-label={entry.rating ?? "no face"}>{entry.rating ? FEEDBACK_FACES[entry.rating] : "–"}</span>
+                        <div>
+                          <p>{entry.message}</p>
+                          <small><b>{entry.displayName ?? "Deleted player"}</b> · {formatDay(entry.createdAt)}{entry.platform && ` · ${platformName(entry.platform)}`}{entry.appVersion && ` ${entry.appVersion}`}</small>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+            </div>
+          </div>
+        )}
+    </article>
   );
 }
 
@@ -602,60 +596,46 @@ function platformName(platform: Platform | null): string {
   return platform ? PLATFORM_NAMES[platform] : "Not reported";
 }
 
-function PlatformPanels({ platforms, allTime }: { platforms: PlatformStats; allTime: boolean }) {
+function PlatformPanel({ platforms, allTime }: { platforms: PlatformStats; allTime: boolean }) {
   const top = Math.max(0, ...platforms.platforms.map((platform) => platform.players));
   const scope = allTime ? "All players" : "Players who ran or opened the game in this period";
 
   return (
-    <>
-      <article className="panel panel--wide">
-        <div className="panel__heading"><div><p className="eyebrow">PLATFORMS</p><h2>iOS and Android players</h2></div><p className="panel__note">{scope}, by their latest game open</p></div>
-        {platforms.platforms.length === 0
-          ? <p className="empty-note">No players in this period.</p>
-          : (
-            <ol className="country-list">
-              {platforms.platforms.map((platform) => (
-                <li key={platform.platform ?? "unknown"}>
-                  <span className="country-list__name">{platformName(platform.platform)}</span>
-                  <span className="country-list__track"><i style={{ width: `${top ? (platform.players / top) * 100 : 0}%` }} /></span>
-                  <b>{formatNumber(platform.players)}</b>
-                  <em>{formatNumber(platforms.players ? (platform.players / platforms.players) * 100 : 0, 0)}%</em>
-                  <small className="platform-versions">{platform.versions.slice(0, 6).map((version) => `${version.version ?? "unknown"} × ${formatNumber(version.players)}`).join(" · ")}</small>
-                </li>
-              ))}
-            </ol>
-          )}
-        <p className="panel__note">Builds before platform reporting show as “Not reported” until the player updates.</p>
-      </article>
-
-      <article className="panel notes-panel city-panel">
-        <p className="eyebrow">ANDROID TESTERS</p><h2>{formatNumber(platforms.androidPlayers.length)} Android {platforms.androidPlayers.length === 1 ? "player" : "players"}</h2>
-        <p className="city-panel__coverage">Most recently opened first, with the version they last opened</p>
-        {platforms.androidPlayers.length === 0
-          ? <p className="empty-note">No Android players yet.</p>
-          : (
-            <ol>
-              {platforms.androidPlayers.slice(0, 15).map((player) => (
-                <li key={player.displayName} title={`Last opened ${formatDay(player.lastOpenedAt)}`}><span>{player.displayName}</span><b>{player.appVersion ?? "–"}</b></li>
-              ))}
-            </ol>
-          )}
-      </article>
-    </>
+    <article className="panel">
+      <div className="panel__heading"><div><p className="eyebrow">PLATFORMS</p><h2>iOS and Android players</h2></div><p className="panel__note">{scope}, by their latest game open</p></div>
+      {platforms.platforms.length === 0
+        ? <p className="empty-note">No players in this period.</p>
+        : (
+          <ol className="country-list">
+            {platforms.platforms.map((platform) => (
+              <li key={platform.platform ?? "unknown"}>
+                <span className="country-list__name">{platformName(platform.platform)}</span>
+                <span className="country-list__track"><i style={{ width: `${top ? (platform.players / top) * 100 : 0}%` }} /></span>
+                <b>{formatNumber(platform.players)}</b>
+                <em>{formatNumber(platforms.players ? (platform.players / platforms.players) * 100 : 0, 0)}%</em>
+                <small className="platform-versions">{platform.versions.slice(0, 6).map((version) => `${version.version ?? "unknown"} × ${formatNumber(version.players)}`).join(" · ")}</small>
+              </li>
+            ))}
+          </ol>
+        )}
+      <p className="panel__note">Builds before platform reporting show as “Not reported” until the player updates.</p>
+    </article>
   );
 }
 
-function TopPlayersPanel({ players, allTime }: { players: TopPlayer[]; allTime: boolean }) {
+function TopPlayersPanel({ players: unsorted, allTime }: { players: TopPlayer[]; allTime: boolean }) {
+  // The API ranks by distance too; sorting here keeps older deployments in the same order.
+  const players = [...unsorted].sort((a, b) => b.distanceMeters - a.distanceMeters || b.runs - a.runs);
   return (
     <article className="panel panel--full">
-      <div className="panel__heading"><div><p className="eyebrow">MOST ACTIVE</p><h2>Top 10 active players</h2></div><p className="panel__note">{allTime ? "All time" : "In this period"}, by days active then runs</p></div>
+      <div className="panel__heading"><div><p className="eyebrow">MOST ACTIVE</p><h2>Top 10 active players</h2></div><p className="panel__note">{allTime ? "All time" : "In this period"}, by distance run</p></div>
       {players.length === 0
         ? <p className="empty-note">No completed runs in this period.</p>
         : (
           <div className="top-players">
             <table>
               <thead>
-                <tr><th scope="col">#</th><th scope="col">Player</th><th scope="col">Country</th><th scope="col">Days active</th><th scope="col">Runs</th><th scope="col">Distance</th><th scope="col">Streak</th><th scope="col">Platform</th><th scope="col">Version</th></tr>
+                <tr><th scope="col">#</th><th scope="col">Player</th><th scope="col">Country</th><th scope="col">Distance</th><th scope="col">Runs</th><th scope="col">Days active</th><th scope="col">Streak</th><th scope="col">Platform</th><th scope="col">Version</th></tr>
               </thead>
               <tbody>
                 {players.map((player, index) => (
@@ -665,9 +645,9 @@ function TopPlayersPanel({ players, allTime }: { players: TopPlayer[]; allTime: 
                     <td className="top-players__place">{player.countryCode
                       ? <><i aria-hidden="true">{countryFlag(player.countryCode)}</i> {countryName(player.countryCode)}{player.city && <em>{player.city}</em>}</>
                       : "–"}</td>
-                    <td><b>{formatNumber(player.daysActive)}</b></td>
+                    <td><b>{formatDistance(player.distanceMeters)}</b></td>
                     <td>{formatNumber(player.runs)}</td>
-                    <td>{formatDistance(player.distanceMeters)}</td>
+                    <td>{formatNumber(player.daysActive)}</td>
                     <td>{player.currentStreakDays > 0 ? `${formatNumber(player.currentStreakDays)} ${player.currentStreakDays === 1 ? "day" : "days"}` : "–"}</td>
                     <td>{player.platform ? platformName(player.platform) : "–"}</td>
                     <td className="top-players__version">{player.latestVersion ?? "–"}</td>

@@ -91,3 +91,6 @@ footer { gap:20px; } }
 .platform-versions { grid-column:1 / -1; margin-top:-4px; color:#77756f; font:normal 11px "DM Mono", monospace; }
 .feedback-counts .rate-list__label { font-size:18px; font-weight:700; }
 .feedback-messages { list-style:none; margin:18px 0 0; padding:0; }.feedback-messages li { display:grid; grid-template-columns:32px minmax(0, 1fr); gap:12px; padding:12px 0; border-bottom:1px solid var(--line); }.feedback-messages__face { font-size:20px; line-height:1.2; }.feedback-messages p { margin:0; font-size:14px; line-height:1.45; white-space:pre-wrap; overflow-wrap:anywhere; }.feedback-messages small { display:block; margin-top:5px; color:#77756f; font:11px "DM Mono", monospace; }.feedback-messages small b { color:var(--ink); font-weight:500; }
+.panel-pair { grid-column:1 / -1; display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:28px; }
+.feedback-layout { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1.2fr); gap:40px; }.feedback-layout__label { margin:22px 0 0; color:#77756f; }.feedback-layout .feedback-messages { max-height:420px; overflow-y:auto; padding-right:8px; }
+@media (max-width: 1050px) { .panel-pair, .feedback-layout { grid-template-columns:1fr; } }

@@ -146,7 +146,7 @@ export interface DashboardData {
   trend: TrendPoint[];
   /** Absent from API deployments that predate player locations. */
   locations?: LocationStats;
-  /** Top ten by days active, then runs. Absent from API deployments that predate it. */
+  /** Top ten by distance, then runs. Absent from API deployments that predate it. */
   topPlayers?: TopPlayer[];
   /** Absent from API deployments that predate engagement tracking. */
   engagement?: EngagementStats;
