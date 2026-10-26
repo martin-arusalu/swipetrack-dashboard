@@ -12,7 +12,6 @@ export interface PeriodStats {
   notificationsFailed: number;
   returningPlayers: number;
   retentionRate: number;
-  playersWithDisplayNames: number;
   appleLinkedPlayers: number;
   googleLinkedPlayers?: number;
   distanceMeters: number;
@@ -78,18 +77,10 @@ export interface PlatformCount {
   versions: { version: string | null; players: number }[];
 }
 
-export interface AndroidPlayer {
-  displayName: string;
-  appVersion: string | null;
-  lastOpenedAt: string;
-}
-
 /** Players who ran or opened the game in the selected range, or every player for all time. */
 export interface PlatformStats {
   players: number;
   platforms: PlatformCount[];
-  /** The 50 most recently seen Android players. */
-  androidPlayers: AndroidPlayer[];
 }
 
 export interface RetentionDay {

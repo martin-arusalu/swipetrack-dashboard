@@ -319,6 +319,8 @@ function Dashboard({ connection, data, comparison, selection, onSelectionChange,
             </div>
           </article>
 
+          {data.engagement && <RetentionPanel engagement={data.engagement} allTime={periodKey === "total"} />}
+
           {data.activityPatterns && <ActivityPatternPanels patterns={data.activityPatterns} allTime={periodKey === "total"} />}
 
           {data.engagement && <EngagementPanels engagement={data.engagement} allTime={periodKey === "total"} />}
@@ -337,7 +339,7 @@ function Dashboard({ connection, data, comparison, selection, onSelectionChange,
           <LeaderboardPanel connection={connection} refreshKey={data.generatedAt} />
         </section>
       </main>
-      <footer><span>SwipeTrack telemetry</span><span>Only top-player, leaderboard, feedback and Android tester names and locations leave the API.</span></footer>
+      <footer><span>SwipeTrack telemetry</span><span>Only top-player, leaderboard and feedback names and locations leave the API.</span></footer>
     </div>
   );
 }
@@ -416,28 +418,36 @@ function ActivityPatternChart({ eyebrow, heading, note, data }: { eyebrow: strin
   );
 }
 
+function cohortLabel(allTime: boolean): string {
+  return allTime ? "All players" : "Players who joined in this period";
+}
+
+function RetentionPanel({ engagement, allTime }: { engagement: EngagementStats; allTime: boolean }) {
+  return (
+    <article className="panel notes-panel retention-panel">
+      <p className="eyebrow">COHORT RETENTION</p><h2>Who comes back</h2>
+      <p className="city-panel__coverage">{cohortLabel(allTime)}, active on day 1, 7 and 30 after joining</p>
+      <ol className="rate-list rate-list--stacked">
+        {engagement.retention.map((day) => (
+          <RateRow
+            key={day.day}
+            label={`D${day.day}`}
+            rate={day.rate}
+            empty={day.eligiblePlayers === 0}
+            count={day.eligiblePlayers === 0 ? "too early" : `${formatNumber(day.retainedPlayers)} of ${formatNumber(day.eligiblePlayers)}`}
+          />
+        ))}
+      </ol>
+    </article>
+  );
+}
+
 function EngagementPanels({ engagement, allTime }: { engagement: EngagementStats; allTime: boolean }) {
-  const cohort = allTime ? "All players" : "Players who joined in this period";
+  const cohort = cohortLabel(allTime);
   const { leaderboardViews: views, notificationReturns: returns } = engagement;
 
   return (
     <>
-      <article className="panel notes-panel retention-panel">
-        <p className="eyebrow">COHORT RETENTION</p><h2>Who comes back</h2>
-        <p className="city-panel__coverage">{cohort}, active on day 1, 7 and 30 after joining</p>
-        <ol className="rate-list rate-list--stacked">
-          {engagement.retention.map((day) => (
-            <RateRow
-              key={day.day}
-              label={`D${day.day}`}
-              rate={day.rate}
-              empty={day.eligiblePlayers === 0}
-              count={day.eligiblePlayers === 0 ? "too early" : `${formatNumber(day.retainedPlayers)} of ${formatNumber(day.eligiblePlayers)}`}
-            />
-          ))}
-        </ol>
-      </article>
-
       <article className="panel panel--wide">
         <div className="panel__heading"><div><p className="eyebrow">NEW PLAYER FUNNEL</p><h2>How far new players run</h2></div><p className="panel__note">{cohort}, runs to date</p></div>
         <div className="funnel-summary">
