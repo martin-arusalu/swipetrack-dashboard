@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -23,7 +23,7 @@ import {
   selectionQuery,
   toDateInput,
 } from "./ranges";
-import type { ActivityBucket, ActivityPatterns, AuthMode, Connection, DashboardData, EngagementStats, FeedbackRating, FeedbackStats, LeaderboardPage, LeaderboardStat, LocationStats, PeriodStats, Platform, PlatformStats, TopPlayer } from "./types";
+import type { ActivityBucket, ActivityPatterns, AuthMode, Connection, DashboardData, EngagementStats, FeedbackRating, FeedbackStats, LeaderboardPage, LeaderboardStat, LocationStats, PeriodStats, Platform, PlatformStats, TopPlayer, TrendPoint } from "./types";
 
 const DASHBOARD_ENDPOINT =
   "https://dnodkkhbjalucwvmwhar.supabase.co/functions/v1/dashboard-stats";
@@ -244,7 +244,6 @@ function Dashboard({ connection, data, comparison, selection, onSelectionChange,
   const runsByProfile = Object.entries(selected.runsByProfile)
     .map(([distance, runs]) => ({ distance: Number(distance), label: Number(distance) >= 1_000 ? `${Number(distance) / 1_000}k` : distance, runs }))
     .sort((a, b) => a.distance - b.distance);
-  const trend = data.trend.map((point) => ({ ...point, label: dateLabel(point.date) }));
   const appleShare = selected.activePlayers ? selected.appleLinkedPlayers / selected.activePlayers : 0;
   const googleLinkedPlayers = selected.googleLinkedPlayers ?? 0;
   const googleShare = selected.activePlayers ? googleLinkedPlayers / selected.activePlayers : 0;
@@ -278,22 +277,7 @@ function Dashboard({ connection, data, comparison, selection, onSelectionChange,
         </section>
 
         <section className="chart-grid">
-          <article className="panel panel--wide">
-            <div className="panel__heading"><div><p className="eyebrow">{trend.length}-DAY MOVEMENT</p><h2>Activity rhythm</h2></div><div className="legend"><span className="legend__runs">Runs</span><span className="legend__players">Active players</span></div></div>
-            <div className="large-chart">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={trend} margin={{ top: 15, right: 8, left: -20, bottom: 0 }}>
-                  <defs><linearGradient id="runsFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#ff6b4a" stopOpacity={0.42}/><stop offset="100%" stopColor="#ff6b4a" stopOpacity={0}/></linearGradient></defs>
-                  <CartesianGrid stroke="#d7d3ca" strokeDasharray="2 7" vertical={false} />
-                  <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#77746e", fontSize: 11 }} minTickGap={28} />
-                  <YAxis axisLine={false} tickLine={false} allowDecimals={false} tick={{ fill: "#77746e", fontSize: 11 }} />
-                  <Tooltip contentStyle={{ background: "#171916", color: "#fff", border: 0, borderRadius: 4 }} labelStyle={{ color: "#b7ff46" }} />
-                  <Area type="monotone" dataKey="runs" stroke="#ff6b4a" strokeWidth={3} fill="url(#runsFill)" />
-                  <Area type="monotone" dataKey="activePlayers" stroke="#171916" strokeWidth={2} fill="transparent" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </article>
+          <ActivityRhythmPanel trend={data.trend} />
 
           <article className="panel identity-panel">
             <div className="panel__heading"><div><p className="eyebrow">PLAYER SIGNAL</p><h2>Identity & return</h2></div></div>
@@ -412,6 +396,120 @@ function ActivityPatternChart({ eyebrow, heading, note, data }: { eyebrow: strin
             <Tooltip cursor={{ fill: "#eeebe3" }} contentStyle={{ background: "#171916", color: "#fff", border: 0, borderRadius: 4 }} labelStyle={{ color: "#b7ff46" }} formatter={(value) => [formatNumber(Number(value)), definition.label]} />
             <Bar dataKey={metric} fill="#b7ff46" stroke="#171916" strokeWidth={1.5} radius={[3, 3, 0, 0]} />
           </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </article>
+  );
+}
+
+type TrendGranularity = "day" | "week" | "month";
+type TrendSeries = "runs" | "activePlayers" | "newPlayers" | "distanceMeters";
+
+const TREND_GRANULARITIES: { key: TrendGranularity; label: string }[] = [
+  { key: "day", label: "Day" },
+  { key: "week", label: "Week" },
+  { key: "month", label: "Month" },
+];
+
+const TREND_SERIES: { key: TrendSeries; label: string; color: string }[] = [
+  { key: "runs", label: "Runs", color: "#ff6b4a" },
+  { key: "activePlayers", label: "Active players", color: "#171916" },
+  { key: "newPlayers", label: "New players", color: "#5f9e10" },
+  { key: "distanceMeters", label: "Distance", color: "#8a8780" },
+];
+
+/** Weeks start on Monday. Trend dates are calendar days, so the math stays in UTC. */
+function trendBucketStart(date: string, granularity: TrendGranularity): string {
+  if (granularity === "day") return date;
+  if (granularity === "month") return `${date.slice(0, 7)}-01`;
+  const day = new Date(`${date}T00:00:00Z`);
+  day.setUTCDate(day.getUTCDate() - ((day.getUTCDay() + 6) % 7));
+  return day.toISOString().slice(0, 10);
+}
+
+function trendBucketLabel(start: string, granularity: TrendGranularity): string {
+  if (granularity !== "month") return dateLabel(start);
+  return new Intl.DateTimeFormat(undefined, { month: "short", year: "numeric", timeZone: "UTC" })
+    .format(new Date(`${start}T00:00:00Z`));
+}
+
+/**
+ * Runs, new players and distance are summed. Daily active players cannot be summed without
+ * counting a player once per day, so weeks and months show the average daily active players.
+ */
+function aggregateTrend(trend: TrendPoint[], granularity: TrendGranularity) {
+  const buckets = new Map<string, { start: string; days: number; runs: number; activePlayers: number; newPlayers: number; distanceMeters: number }>();
+  for (const point of trend) {
+    const start = trendBucketStart(point.date, granularity);
+    const bucket = buckets.get(start) ?? { start, days: 0, runs: 0, activePlayers: 0, newPlayers: 0, distanceMeters: 0 };
+    bucket.days += 1;
+    bucket.runs += point.runs;
+    bucket.activePlayers += point.activePlayers;
+    bucket.newPlayers += point.newPlayers;
+    bucket.distanceMeters += point.distanceMeters;
+    buckets.set(start, bucket);
+  }
+  return [...buckets.values()].map((bucket) => ({
+    ...bucket,
+    activePlayers: bucket.activePlayers / bucket.days,
+    label: trendBucketLabel(bucket.start, granularity),
+  }));
+}
+
+function ActivityRhythmPanel({ trend }: { trend: TrendPoint[] }) {
+  const [granularity, setGranularity] = useState<TrendGranularity>("day");
+  const [visible, setVisible] = useState<TrendSeries[]>(["runs", "activePlayers"]);
+  const data = useMemo(() => aggregateTrend(trend, granularity), [trend, granularity]);
+  const averaged = granularity !== "day" && visible.includes("activePlayers");
+  const showDistance = visible.includes("distanceMeters");
+  const showCounts = visible.some((key) => key !== "distanceMeters");
+
+  function toggle(key: TrendSeries) {
+    setVisible((current) => current.includes(key)
+      ? (current.length > 1 ? current.filter((entry) => entry !== key) : current)
+      : [...current, key]);
+  }
+
+  function seriesLabel(key: TrendSeries): string {
+    if (key === "activePlayers" && granularity !== "day") return "Avg daily active players";
+    return TREND_SERIES.find((entry) => entry.key === key)?.label ?? key;
+  }
+
+  return (
+    <article className="panel panel--wide">
+      <div className="panel__heading">
+        <div><p className="eyebrow">{trend.length}-DAY MOVEMENT{granularity === "day" ? "" : ` / BY ${granularity.toUpperCase()}`}</p><h2>Activity rhythm</h2></div>
+        <nav className="period-tabs period-tabs--muted" aria-label="Activity rhythm grouping">
+          {TREND_GRANULARITIES.map((entry) => (
+            <button key={entry.key} className={entry.key === granularity ? "active" : ""} onClick={() => setGranularity(entry.key)}>{entry.label}</button>
+          ))}
+        </nav>
+      </div>
+      <div className="series-toggles" role="group" aria-label="Activity rhythm series">
+        {TREND_SERIES.map((entry) => (
+          <button key={entry.key} className={visible.includes(entry.key) ? "active" : ""} aria-pressed={visible.includes(entry.key)} style={{ "--series": entry.color } as CSSProperties} onClick={() => toggle(entry.key)}>{entry.label}</button>
+        ))}
+        {averaged && <span className="panel__note">Active players are a daily average per {granularity}</span>}
+      </div>
+      <div className="large-chart">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={data} margin={{ top: 15, right: 8, left: -20, bottom: 0 }}>
+            <defs><linearGradient id="runsFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#ff6b4a" stopOpacity={0.42}/><stop offset="100%" stopColor="#ff6b4a" stopOpacity={0}/></linearGradient></defs>
+            <CartesianGrid stroke="#d7d3ca" strokeDasharray="2 7" vertical={false} />
+            <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#77746e", fontSize: 11 }} minTickGap={28} />
+            <YAxis yAxisId="count" hide={!showCounts} axisLine={false} tickLine={false} allowDecimals={false} tick={{ fill: "#77746e", fontSize: 11 }} />
+            <YAxis yAxisId="distance" orientation="right" hide={!showDistance} width={56} axisLine={false} tickLine={false} tick={{ fill: "#8a8780", fontSize: 11 }} tickFormatter={(value) => formatDistance(Number(value))} />
+            <Tooltip
+              contentStyle={{ background: "#171916", color: "#fff", border: 0, borderRadius: 4 }}
+              labelStyle={{ color: "#b7ff46" }}
+              labelFormatter={(label) => (granularity === "week" ? `Week of ${label}` : label)}
+              formatter={(value, name) => [name === "distanceMeters" ? formatDistance(Number(value)) : formatNumber(Number(value), 1), seriesLabel(name as TrendSeries)]}
+            />
+            {visible.includes("runs") && <Area yAxisId="count" type="monotone" dataKey="runs" stroke="#ff6b4a" strokeWidth={3} fill="url(#runsFill)" />}
+            {visible.includes("activePlayers") && <Area yAxisId="count" type="monotone" dataKey="activePlayers" stroke="#171916" strokeWidth={2} fill="transparent" />}
+            {visible.includes("newPlayers") && <Area yAxisId="count" type="monotone" dataKey="newPlayers" stroke="#5f9e10" strokeWidth={2} fill="transparent" />}
+            {showDistance && <Area yAxisId="distance" type="monotone" dataKey="distanceMeters" stroke="#8a8780" strokeWidth={2} strokeDasharray="5 4" fill="transparent" />}
+          </AreaChart>
         </ResponsiveContainer>
       </div>
     </article>
