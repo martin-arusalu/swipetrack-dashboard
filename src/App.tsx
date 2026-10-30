@@ -23,7 +23,7 @@ import {
   selectionQuery,
   toDateInput,
 } from "./ranges";
-import type { ActivityBucket, ActivityPatterns, AuthMode, Connection, DashboardData, EngagementStats, FeedbackRating, FeedbackStats, LeaderboardPage, LeaderboardStat, LocationStats, PeriodStats, Platform, PlatformStats, TopPlayer, TrendPoint } from "./types";
+import type { ActivityBucket, ActivityPatterns, AuthMode, Connection, DashboardData, EngagementStats, FeedbackRating, FeedbackStats, LeaderboardPage, LeaderboardStat, LocationStats, PeriodStats, Platform, PlayerLevelStats, PlatformStats, TopPlayer, TrendPoint } from "./types";
 
 const DASHBOARD_ENDPOINT =
   "https://dnodkkhbjalucwvmwhar.supabase.co/functions/v1/dashboard-stats";
@@ -310,6 +310,8 @@ function Dashboard({ connection, data, comparison, selection, onSelectionChange,
           {data.engagement && <EngagementPanels engagement={data.engagement} allTime={periodKey === "total"} />}
 
           {data.feedback && <FeedbackPanels feedback={data.feedback} allTime={periodKey === "total"} />}
+
+          {data.playerLevels && <PlayerLevelPanel levels={data.playerLevels} allTime={periodKey === "total"} />}
 
           {(data.platforms || data.locations) && (
             <div className="panel-pair">
@@ -727,6 +729,40 @@ function PlatformPanel({ platforms, allTime }: { platforms: PlatformStats; allTi
           </ol>
         )}
       <p className="panel__note">Builds before platform reporting show as “Not reported” until the player updates.</p>
+    </article>
+  );
+}
+
+function PlayerLevelPanel({ levels, allTime }: { levels: PlayerLevelStats; allTime: boolean }) {
+  const scope = allTime ? "All players" : "Players who ran or opened the game in this period";
+  const buckets = levels.buckets.map((bucket) => ({
+    ...bucket,
+    label: bucket.minLevel === bucket.maxLevel ? `${bucket.minLevel}` : `${bucket.minLevel}–${bucket.maxLevel}`,
+  }));
+
+  return (
+    <article className="panel panel--full">
+      <div className="panel__heading"><div><p className="eyebrow">PLAYER LEVELS</p><h2>How far players have levelled up</h2></div><p className="panel__note">{scope}, by current overall level. {formatNumber(levels.players)} players</p></div>
+      {levels.players === 0
+        ? <p className="empty-note">No players in this period.</p>
+        : (
+          <div className="profile-chart">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={buckets} margin={{ top: 12, right: 8, left: -20, bottom: 0 }}>
+                <CartesianGrid stroke="#d7d3ca" strokeDasharray="2 7" vertical={false} />
+                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#565650", fontSize: 12, fontWeight: 700 }} />
+                <YAxis axisLine={false} tickLine={false} allowDecimals={false} tick={{ fill: "#77746e", fontSize: 11 }} />
+                <Tooltip
+                  cursor={{ fill: "#eeebe3" }}
+                  contentStyle={{ background: "#171916", color: "#fff", border: 0, borderRadius: 4 }}
+                  labelFormatter={(label) => `Level ${label}`}
+                  formatter={(value) => [`${formatNumber(Number(value))} (${formatNumber((Number(value) / levels.players) * 100, 0)}%)`, "Players"]}
+                />
+                <Bar dataKey="players" fill="#b7ff46" stroke="#171916" strokeWidth={1.5} radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
     </article>
   );
 }

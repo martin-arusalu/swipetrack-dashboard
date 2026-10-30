@@ -147,6 +147,24 @@ export interface DashboardData {
   activityPatterns?: ActivityPatterns;
   /** Absent from API deployments that predate the feedback prompt. */
   feedback?: FeedbackStats;
+  /** Absent from API deployments that predate player level buckets. */
+  playerLevels?: PlayerLevelStats;
+}
+
+export interface PlayerLevelBucket {
+  minLevel: number;
+  maxLevel: number;
+  players: number;
+}
+
+/**
+ * Players by their current overall level (the game's weighted mix of the four attribute levels),
+ * for players who ran or opened the game in the selected range, or every player for all time.
+ */
+export interface PlayerLevelStats {
+  players: number;
+  /** Fixed buckets from level 1 to 100, lowest first, including empty ones. */
+  buckets: PlayerLevelBucket[];
 }
 
 export type FeedbackRating = "happy" | "neutral" | "sad";
