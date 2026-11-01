@@ -158,7 +158,7 @@ export interface PlayerLevelBucket {
 }
 
 /**
- * Players by their current overall level (the game's weighted mix of the four attribute levels),
+ * Players by their highest race level on any distance (which sets the furthest stadium they reach),
  * for players who ran or opened the game in the selected range, or every player for all time.
  */
 export interface PlayerLevelStats {

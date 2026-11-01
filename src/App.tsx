@@ -733,16 +733,28 @@ function PlatformPanel({ platforms, allTime }: { platforms: PlatformStats; allTi
   );
 }
 
+// Mirrors the game's StadiumProgressionRules: each race's stadium comes from that distance's race level.
+function stadiumForRaceLevel(level: number) {
+  if (level <= 1) return "Meadow";
+  if (level <= 9) return "Forest";
+  if (level <= 19) return "City";
+  if (level <= 29) return "Mountain";
+  if (level <= 39) return "Coast";
+  if (level <= 49) return "Canyon";
+  return "Glacier";
+}
+
 function PlayerLevelPanel({ levels, allTime }: { levels: PlayerLevelStats; allTime: boolean }) {
   const scope = allTime ? "All players" : "Players who ran or opened the game in this period";
   const buckets = levels.buckets.map((bucket) => ({
     ...bucket,
     label: bucket.minLevel === bucket.maxLevel ? `${bucket.minLevel}` : `${bucket.minLevel}–${bucket.maxLevel}`,
+    stadium: stadiumForRaceLevel(bucket.minLevel),
   }));
 
   return (
     <article className="panel panel--full">
-      <div className="panel__heading"><div><p className="eyebrow">PLAYER LEVELS</p><h2>How far players have levelled up</h2></div><p className="panel__note">{scope}, by current overall level. {formatNumber(levels.players)} players</p></div>
+      <div className="panel__heading"><div><p className="eyebrow">PLAYER LEVELS</p><h2>How far players have levelled up</h2></div><p className="panel__note">{scope}, by highest race level on any distance (the furthest stadium reached). {formatNumber(levels.players)} players</p></div>
       {levels.players === 0
         ? <p className="empty-note">No players in this period.</p>
         : (
@@ -755,7 +767,7 @@ function PlayerLevelPanel({ levels, allTime }: { levels: PlayerLevelStats; allTi
                 <Tooltip
                   cursor={{ fill: "#eeebe3" }}
                   contentStyle={{ background: "#171916", color: "#fff", border: 0, borderRadius: 4 }}
-                  labelFormatter={(label) => `Level ${label}`}
+                  labelFormatter={(label, payload) => `Race level ${label} · ${payload?.[0]?.payload?.stadium ?? ""}`}
                   formatter={(value) => [`${formatNumber(Number(value))} (${formatNumber((Number(value) / levels.players) * 100, 0)}%)`, "Players"]}
                 />
                 <Bar dataKey="players" fill="#b7ff46" stroke="#171916" strokeWidth={1.5} radius={[3, 3, 0, 0]} />
