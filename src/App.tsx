@@ -735,13 +735,15 @@ function PlatformPanel({ platforms, allTime }: { platforms: PlatformStats; allTi
 
 // Mirrors the game's StadiumProgressionRules: each race's stadium comes from that distance's race level.
 function stadiumForRaceLevel(level: number) {
-  if (level <= 1) return "Meadow";
+  if (level <= 2) return "Meadow";
   if (level <= 9) return "Forest";
   if (level <= 19) return "City";
   if (level <= 29) return "Mountain";
   if (level <= 39) return "Coast";
   if (level <= 49) return "Canyon";
-  return "Glacier";
+  if (level <= 59) return "Glacier";
+  if (level <= 69) return "National";
+  return "Desert";
 }
 
 function PlayerLevelPanel({ levels, allTime }: { levels: PlayerLevelStats; allTime: boolean }) {
