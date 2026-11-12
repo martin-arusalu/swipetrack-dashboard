@@ -149,6 +149,49 @@ export interface DashboardData {
   feedback?: FeedbackStats;
   /** Absent from API deployments that predate player level buckets. */
   playerLevels?: PlayerLevelStats;
+  /** Absent from API deployments that predate race exit stats. */
+  raceExits?: RaceExitStats;
+}
+
+export interface RaceExitDistance {
+  distance: number;
+  exits: number;
+  players: number;
+  /** Finished races at this distance from the same app versions, for an exit rate. */
+  finishes: number;
+  /** Median share of the race run before quitting, 0-100; null without exits. */
+  medianPercent: number | null;
+  /** Exits by share of the race run: ten buckets, 0-10% first. */
+  progress: number[];
+}
+
+export interface RaceExitTimeBucket {
+  exits: number;
+  finishes: number;
+}
+
+/**
+ * Races quit from the pause menu (race_exit events) in the selected range, all time when none.
+ * Finishes are finished races from the app versions that report exits, since the first exit.
+ */
+export interface RaceExitStats {
+  timezone: string;
+  exits: number;
+  players: number;
+  finishes: number;
+  /** First exit in the range; null without exits. */
+  trackingSince: string | null;
+  /** Share of exits (0-1) made while in last place. */
+  lastPlaceShare: number;
+  distances: RaceExitDistance[];
+  /** Exits by the race level of the race (which picks the stadium). */
+  levels: { minLevel: number; maxLevel: number; exits: number }[];
+  stadiums: { stadium: string; exits: number }[];
+  hours: (RaceExitTimeBucket & { hour: number })[];
+  /** ISO weekday: 1 = Monday through 7 = Sunday. */
+  weekdays: (RaceExitTimeBucket & { weekday: number })[];
+  /** Tallinn calendar days from the first to the last exit. */
+  daily: (RaceExitTimeBucket & { date: string; players: number })[];
 }
 
 export interface PlayerLevelBucket {

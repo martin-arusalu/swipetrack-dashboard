@@ -23,7 +23,7 @@ import {
   selectionQuery,
   toDateInput,
 } from "./ranges";
-import type { ActivityBucket, ActivityPatterns, AuthMode, Connection, DashboardData, EngagementStats, FeedbackRating, FeedbackStats, LeaderboardPage, LeaderboardStat, LocationStats, PeriodStats, Platform, PlayerLevelStats, PlatformStats, TopPlayer, TrendPoint } from "./types";
+import type { ActivityBucket, ActivityPatterns, AuthMode, Connection, DashboardData, EngagementStats, FeedbackRating, FeedbackStats, LeaderboardPage, LeaderboardStat, LocationStats, PeriodStats, Platform, PlayerLevelStats, PlatformStats, RaceExitStats, TopPlayer, TrendPoint } from "./types";
 
 const DASHBOARD_ENDPOINT =
   "https://dnodkkhbjalucwvmwhar.supabase.co/functions/v1/dashboard-stats";
@@ -312,6 +312,8 @@ function Dashboard({ connection, data, comparison, selection, onSelectionChange,
           {data.feedback && <FeedbackPanels feedback={data.feedback} allTime={periodKey === "total"} />}
 
           {data.playerLevels && <PlayerLevelPanel levels={data.playerLevels} allTime={periodKey === "total"} />}
+
+          {data.raceExits && <RaceExitPanels exits={data.raceExits} allTime={periodKey === "total"} />}
 
           {(data.platforms || data.locations) && (
             <div className="panel-pair">
@@ -778,6 +780,158 @@ function PlayerLevelPanel({ levels, allTime }: { levels: PlayerLevelStats; allTi
           </div>
         )}
     </article>
+  );
+}
+
+function exitRate(exits: number, finishes: number): string {
+  const started = exits + finishes;
+  return started === 0 ? "–" : `${formatNumber((exits / started) * 100, 1)}%`;
+}
+
+function distanceLabel(meters: number): string {
+  return meters < 1_000 ? `${meters} m` : `${formatNumber(meters / 1_000, 1)} km`;
+}
+
+const EXIT_TOOLTIP_STYLE = { background: "#171916", color: "#fff", border: 0, borderRadius: 4 };
+
+type ExitTimeView = "hour" | "weekday" | "day";
+
+const EXIT_TIME_VIEWS: { key: ExitTimeView; label: string }[] = [
+  { key: "hour", label: "Hour of day" },
+  { key: "weekday", label: "Weekday" },
+  { key: "day", label: "Day" },
+];
+
+function RaceExitPanels({ exits, allTime }: { exits: RaceExitStats; allTime: boolean }) {
+  const [distance, setDistance] = useState<number | null>(null);
+  const [timeView, setTimeView] = useState<ExitTimeView>("hour");
+  const scope = allTime ? "All time" : "In this period";
+
+  const distances = exits.distances.map((entry) => ({ ...entry, label: distanceLabel(entry.distance), rate: exitRate(entry.exits, entry.finishes) }));
+  const withExits = distances.filter((entry) => entry.exits > 0);
+  const selected = distances.find((entry) => entry.distance === distance) ?? null;
+  const progressSource = selected ? [selected] : distances;
+  const progress = Array.from({ length: 10 }, (_, index) => ({
+    label: `${index * 10}–${index * 10 + 10}%`,
+    exits: progressSource.reduce((sum, entry) => sum + (entry.progress[index] ?? 0), 0),
+  }));
+  const levels = exits.levels.map((bucket) => ({
+    ...bucket,
+    label: bucket.minLevel === bucket.maxLevel ? `${bucket.minLevel}` : `${bucket.minLevel}–${bucket.maxLevel}`,
+    stadium: stadiumForRaceLevel(bucket.minLevel),
+  }));
+  const timeData = timeView === "hour"
+    ? exits.hours.map((bucket) => ({ ...bucket, label: String(bucket.hour).padStart(2, "0") }))
+    : timeView === "weekday"
+      ? exits.weekdays.map((bucket) => ({ ...bucket, label: WEEKDAY_LABELS[bucket.weekday - 1] }))
+      : exits.daily.map((bucket) => ({ ...bucket, label: dateLabel(bucket.date) }));
+  const since = exits.trackingSince ? formatDay(exits.trackingSince) : null;
+  const summary = `${formatNumber(exits.exits)} exits by ${formatNumber(exits.players)} players · ${exitRate(exits.exits, exits.finishes)} of started races · ${formatNumber(exits.lastPlaceShare * 100)}% while last`;
+
+  if (exits.exits === 0) {
+    return (
+      <article className="panel panel--full">
+        <div className="panel__heading"><div><p className="eyebrow">RACE EXITS</p><h2>Where players quit races</h2></div><p className="panel__note">{scope}, races quit from the pause menu</p></div>
+        <p className="empty-note">No race exits in this period.</p>
+      </article>
+    );
+  }
+
+  return (
+    <>
+      <div className="panel-pair">
+        <article className="panel">
+          <div className="panel__heading"><div><p className="eyebrow">RACE EXITS</p><h2>Which races players quit</h2></div><p className="panel__note">{scope}{since ? `, tracked since ${since}` : ""}. {summary}</p></div>
+          <div className="profile-chart">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={distances} margin={{ top: 12, right: 8, left: -20, bottom: 0 }}>
+                <CartesianGrid stroke="#d7d3ca" strokeDasharray="2 7" vertical={false} />
+                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#565650", fontSize: 11, fontWeight: 700 }} />
+                <YAxis axisLine={false} tickLine={false} allowDecimals={false} tick={{ fill: "#77746e", fontSize: 11 }} />
+                <Tooltip
+                  cursor={{ fill: "#eeebe3" }}
+                  contentStyle={EXIT_TOOLTIP_STYLE}
+                  labelStyle={{ color: "#ff6b4a" }}
+                  formatter={(value, _name, item) => {
+                    const entry = item.payload as (typeof distances)[number];
+                    const median = entry.medianPercent === null ? "" : `, median ${formatNumber(entry.medianPercent)}% in`;
+                    return [`${formatNumber(Number(value))} by ${formatNumber(entry.players)} players (${entry.rate} of started${median})`, "Exits"];
+                  }}
+                />
+                <Bar dataKey="exits" fill="#ff6b4a" stroke="#171916" strokeWidth={1.5} radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </article>
+        <article className="panel">
+          <div className="panel__heading"><div><p className="eyebrow">EXITS BY RACE LEVEL</p><h2>Where in the ladder</h2></div><p className="panel__note">Race level of the quit race, which picks its stadium</p></div>
+          <div className="profile-chart">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={levels} margin={{ top: 12, right: 8, left: -20, bottom: 0 }}>
+                <CartesianGrid stroke="#d7d3ca" strokeDasharray="2 7" vertical={false} />
+                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#565650", fontSize: 11, fontWeight: 700 }} />
+                <YAxis axisLine={false} tickLine={false} allowDecimals={false} tick={{ fill: "#77746e", fontSize: 11 }} />
+                <Tooltip
+                  cursor={{ fill: "#eeebe3" }}
+                  contentStyle={EXIT_TOOLTIP_STYLE}
+                  labelStyle={{ color: "#ff6b4a" }}
+                  labelFormatter={(label, payload) => `Race level ${label} · ${payload?.[0]?.payload?.stadium ?? ""}`}
+                  formatter={(value) => [formatNumber(Number(value)), "Exits"]}
+                />
+                <Bar dataKey="exits" fill="#ff6b4a" stroke="#171916" strokeWidth={1.5} radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </article>
+      </div>
+      <article className="panel panel--full">
+        <div className="panel__heading"><div><p className="eyebrow">EXIT POINT</p><h2>How far into the race players quit</h2></div><p className="panel__note">Share of the distance run before quitting{selected?.medianPercent != null ? `, median ${formatNumber(selected.medianPercent)}%` : ""}</p></div>
+        <nav className="period-tabs period-tabs--muted leaderboard-tabs" aria-label="Exit point distance">
+          <button className={distance === null ? "active" : ""} onClick={() => setDistance(null)}>All</button>
+          {withExits.map((entry) => (
+            <button key={entry.distance} className={entry.distance === distance ? "active" : ""} onClick={() => setDistance(entry.distance)}>{entry.label}</button>
+          ))}
+        </nav>
+        <div className="profile-chart">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={progress} margin={{ top: 12, right: 8, left: -20, bottom: 0 }}>
+              <CartesianGrid stroke="#d7d3ca" strokeDasharray="2 7" vertical={false} />
+              <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#565650", fontSize: 11, fontWeight: 700 }} />
+              <YAxis axisLine={false} tickLine={false} allowDecimals={false} tick={{ fill: "#77746e", fontSize: 11 }} />
+              <Tooltip cursor={{ fill: "#eeebe3" }} contentStyle={EXIT_TOOLTIP_STYLE} labelStyle={{ color: "#ff6b4a" }} formatter={(value) => [formatNumber(Number(value)), "Exits"]} />
+              <Bar dataKey="exits" fill="#ff6b4a" stroke="#171916" strokeWidth={1.5} radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </article>
+      <article className="panel panel--full">
+        <div className="panel__heading"><div><p className="eyebrow">EXIT TIMING</p><h2>When players quit races</h2></div><p className="panel__note">{scope}, Estonian time. Hover for the share of started races quit</p></div>
+        <nav className="period-tabs period-tabs--muted leaderboard-tabs" aria-label="Exit timing view">
+          {EXIT_TIME_VIEWS.map((entry) => (
+            <button key={entry.key} className={entry.key === timeView ? "active" : ""} onClick={() => setTimeView(entry.key)}>{entry.label}</button>
+          ))}
+        </nav>
+        <div className="profile-chart">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={timeData} margin={{ top: 12, right: 8, left: -20, bottom: 0 }}>
+              <CartesianGrid stroke="#d7d3ca" strokeDasharray="2 7" vertical={false} />
+              <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#565650", fontSize: 11, fontWeight: 700 }} />
+              <YAxis axisLine={false} tickLine={false} allowDecimals={false} tick={{ fill: "#77746e", fontSize: 11 }} />
+              <Tooltip
+                cursor={{ fill: "#eeebe3" }}
+                contentStyle={EXIT_TOOLTIP_STYLE}
+                labelStyle={{ color: "#ff6b4a" }}
+                formatter={(value, _name, item) => {
+                  const entry = item.payload as RaceExitStats["hours"][number];
+                  return [`${formatNumber(Number(value))} (${exitRate(entry.exits, entry.finishes)} of started)`, "Exits"];
+                }}
+              />
+              <Bar dataKey="exits" fill="#ff6b4a" stroke="#171916" strokeWidth={1.5} radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </article>
+    </>
   );
 }
 
